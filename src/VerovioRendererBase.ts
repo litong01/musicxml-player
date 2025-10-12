@@ -42,14 +42,12 @@ export class VerovioRendererBase {
   }
 
   protected _recalculate(
-    container: HTMLElement,
     timemap: TimeMapEntryFixed[],
     svgs: string[],
-    options: PlayerOptions
   ) {
     // Initialize the Verovio state.
-    this._container = container;
-    this._options = options;
+    assertIsDefined(this._container);
+    assertIsDefined(this._options);
     this._events = timemap.map((e: TimeMapEntryFixed) => { return {...e, measureEntry: 0, rectNotes: [], notesOn: []}; });
     this._measures = [];
     this._currentNotes = [];
@@ -61,11 +59,10 @@ export class VerovioRendererBase {
       page.setAttribute('id', `page-${i}`);
       page.classList.add('sheet-page');
       page.innerHTML = svg;
-      container.appendChild(page);
+      this._container!.appendChild(page);
 
       // Scale the SVG to the container width.
-      assertIsDefined(this._options);
-      if (!options.horizontal) {
+      if (!this._options!.horizontal) {
         const s = page.getElementsByTagName('svg')[0];
         const w = s.getAttribute('width')?.replace('px', '');
         const h = s.getAttribute('height')?.replace('px', '');

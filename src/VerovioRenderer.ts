@@ -26,6 +26,9 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
   }
 
   async initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void> {
+    this._container = container;
+    this._options = options;
+
     // Adjust options based on PlayerOptions.
     this._vrvOptions = {
       ...{
@@ -48,7 +51,7 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
     }
 
     // Render the score and compute the internal data structures.
-    this._redraw(container, options);
+    this._redraw();
 
     // Initialize the cursor.
     this._cursor.initialize(container);
@@ -64,9 +67,7 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
   }
 
   onResize(): void {
-    assertIsDefined(this._container);
-    assertIsDefined(this._options);
-    this._redraw(this._container, this._options);
+    this._redraw();
     this._move(
       this._currentLocation.index,
       this._currentLocation.start,
@@ -89,8 +90,9 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
     return `verovio v${this._vrv?.getVersion() ?? `Unknown`}`;
   }
 
-  protected _redraw(container: HTMLElement, options: PlayerOptions) {
+  protected _redraw() {
     assertIsDefined(this._vrv);
+    assertIsDefined(this._container);
 
     // Render the score.
     const svgs: string[] = [];
@@ -98,10 +100,10 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
       ...this._vrvOptions,
       ...{
         pageHeight:
-          (container.parentElement!.clientHeight * 100) /
+          (this._container.parentElement!.clientHeight * 100) /
           (this._vrvOptions.scale ?? 100),
         pageWidth:
-          (container.parentElement!.clientWidth * 100) /
+          (this._container.parentElement!.clientWidth * 100) /
           (this._vrvOptions.scale ?? 100),
       },
     });
@@ -112,7 +114,7 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
     const timemap = this._vrv.renderToTimemap({ includeMeasures: true, includeRests: true });
 
     // Delete existing pages and calculate from scratch.
-    container.querySelectorAll('.sheet-page').forEach(e => e.remove());
-    this._recalculate(container, timemap, svgs, options);
+    this._container.querySelectorAll('.sheet-page').forEach(e => e.remove());
+    this._recalculate(timemap, svgs);
   }
 }

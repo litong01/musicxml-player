@@ -23,6 +23,9 @@ export class VerovioStaticRenderer extends VerovioRendererBase implements ISheet
   }
 
   async initialize(container: HTMLElement, _musicXml: string, options: PlayerOptions) {
+    this._container = container;
+    this._options = options;
+
     // Fetch the files.
     const enc = new TextDecoder('utf-8');
     const svgs = await Promise.all(this._svgOrUris.map(async (svgOrUri) =>
@@ -36,7 +39,7 @@ export class VerovioStaticRenderer extends VerovioRendererBase implements ISheet
         : this._eventsOrUri;
 
     // Compute the internal data structures.
-    this._recalculate(container, timemap, svgs, options);
+    this._recalculate(timemap, svgs);
 
     // Initialize the cursor.
     this._cursor.initialize(container);

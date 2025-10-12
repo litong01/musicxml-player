@@ -17,6 +17,6 @@ export declare class VerovioRenderer extends VerovioRendererBase implements IShe
     onResize(): void;
     onEvent(type: string): void;
     get version(): string;
-    protected _redraw(container: HTMLElement, options: PlayerOptions): void;
+    protected _redraw(): void;
 }
 //# sourceMappingURL=VerovioRenderer.d.ts.map

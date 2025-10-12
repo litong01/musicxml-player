@@ -35,7 +35,7 @@ export declare class VerovioRendererBase {
     protected _currentEventEntry: number;
     protected _currentScrollOffset?: number;
     constructor();
-    protected _recalculate(container: HTMLElement, timemap: TimeMapEntryFixed[], svgs: string[], options: PlayerOptions): void;
+    protected _recalculate(timemap: TimeMapEntryFixed[], svgs: string[]): void;
     protected _refresh(): void;
     protected _move(index: MeasureIndex, start: MillisecsTimestamp, offset: MillisecsTimestamp, duration?: MillisecsTimestamp): void;
 }

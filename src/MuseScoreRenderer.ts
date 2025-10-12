@@ -1,6 +1,6 @@
 import type { ISheetRenderer } from './ISheetRenderer';
 import { MuseScoreDownloader, MuseScoreBase } from './MuseScoreBase';
-import type { MeasureIndex, MillisecsTimestamp, Player } from './Player';
+import type { MeasureIndex, MillisecsTimestamp, Player, PlayerOptions } from './Player';
 import { Cursor } from './Cursor';
 import { assertIsDefined, binarySearch } from './helpers';
 import SaxonJS from './saxon-js/SaxonJS3.rt';
@@ -47,7 +47,7 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
     this._cursor.destroy();
   }
 
-  async initialize(container: HTMLElement, musicXml: string): Promise<void> {
+  async initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void> {
     this._container = container;
 
     // Extract the metadata in the base class.
@@ -124,22 +124,36 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
       page.innerHTML = window.atob(svg);
       page.getElementsByTagName('path')[0]?.setAttribute('fill', 'transparent');
       page.addEventListener('click', (event) => {
-        const segment = this._segments?.find((segment) => {
+        assertIsDefined(this._container);
+        const rectContainer = this._container.getBoundingClientRect();
+        const factor = page.getAttribute('data-width') ? rectContainer.width / Number(page.getAttribute('data-width')) : 1;
+        const segment = this._segments!.find((segment) => {
           return (
-            segment.x <= event.offsetX &&
-            segment.y <= event.offsetY &&
-            segment.x + segment.sx > event.offsetX &&
-            segment.y + segment.sy > event.offsetY
+            segment.x * factor <= event.offsetX &&
+            segment.y * factor <= event.offsetY &&
+            (segment.x + segment.sx) * factor > event.offsetX &&
+            (segment.y + segment.sy) * factor > event.offsetY
           );
         });
-        if (segment && this.player) {
-          this.player.moveTo(
+        if (segment) {
+          this.player?.moveTo(
             segment.measure,
             this._timemap![segment.measure].timestamp,
             segment.timestamp - this._timemap![segment.measure].timestamp,
           );
         }
       });
+
+      // Scale the SVG to the container width.
+      if (!options.horizontal) {
+        const s = page.getElementsByTagName('svg')[0];
+        const w = s.width.baseVal;
+        w.convertToSpecifiedUnits(SVGLength.SVG_LENGTHTYPE_PX);
+        page.setAttribute('data-width', `${w.valueInSpecifiedUnits}`);
+        s.setAttribute('width', '100%');
+        s.removeAttribute('height');
+      }
+
       container.appendChild(page);
     });
 
@@ -181,10 +195,12 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
     // Move the cursor to this position.
     assertIsDefined(this._container);
     const rectContainer = this._container.getBoundingClientRect();
+    const page = document.getElementById(`page-${this._segments[sindex].page}`)!;
+    const factor = page.getAttribute('data-width') ? rectContainer.width / Number(page.getAttribute('data-width')) : 1;
     this._cursor.moveTo(
-      this._segments[sindex].x,
-      this._segments[sindex].y - (this._measures[index].sy / 2) + rectContainer.top,
-      this._measures[index].sy * 2
+      this._segments[sindex].x * factor,
+      this._segments[sindex].y * factor - (this._measures[index].sy * factor / 2) + rectContainer.top,
+      this._measures[index].sy * factor * 2
     );
   }
 
