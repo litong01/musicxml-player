@@ -3,7 +3,12 @@ import { VerovioToolkit } from 'verovio/esm';
 import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
 import type { VerovioOptionsFixed, VerovioToolkitFixed } from './VerovioTypes';
 import { VerovioConverterBase } from './VerovioConverterBase';
-import { assertIsDefined, atoab, unrollMusicXml, parseMusicXmlTimemap } from './helpers';
+import {
+  assertIsDefined,
+  atoab,
+  unrollMusicXml,
+  parseMusicXmlTimemap,
+} from './helpers';
 import type { PlayerOptions } from './Player';
 
 /**
@@ -11,7 +16,10 @@ import type { PlayerOptions } from './Player';
  * @see https://book.verovio.org/toolkit-reference/toolkit-methods.html#rendertomidi and
  * @see https://book.verovio.org/toolkit-reference/toolkit-methods.html#rendertotimemap
  */
-export class VerovioConverter extends VerovioConverterBase implements IMIDIConverter {
+export class VerovioConverter
+  extends VerovioConverterBase
+  implements IMIDIConverter
+{
   protected _vrv?: VerovioToolkitFixed;
   protected _timemap: MeasureTimemap = [];
   protected _midi?: ArrayBuffer;
@@ -28,7 +36,10 @@ export class VerovioConverter extends VerovioConverterBase implements IMIDIConve
     };
   }
 
-  async initialize(musicXml: string, options: Required<PlayerOptions>): Promise<void> {
+  async initialize(
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
     // Create Verovio toolkit and load MusicXML.
     const VerovioModule = await createVerovioModule();
     this._vrv = <VerovioToolkitFixed>new VerovioToolkit(VerovioModule);

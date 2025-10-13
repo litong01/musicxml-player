@@ -27,7 +27,7 @@ export declare class MuseScoreRenderer extends MuseScoreBase implements ISheetRe
     constructor(downloader: string | MuseScoreDownloader | ReturnType<MuseScoreDownloader>);
     destroy(): void;
     initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void>;
-    moveTo(index: MeasureIndex, start: MillisecsTimestamp, offset: MillisecsTimestamp, _duration?: MillisecsTimestamp): void;
+    moveTo(index: MeasureIndex, start: MillisecsTimestamp, offset: MillisecsTimestamp): void;
     onResize(): void;
     onEvent(): void;
     get version(): string;

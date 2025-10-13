@@ -2,7 +2,7 @@ import type {
   MeasureIndex,
   MillisecsTimestamp,
   PlayerOptions,
-  Player
+  Player,
 } from './Player';
 
 /**
@@ -16,7 +16,11 @@ import type {
 export interface ISheetRenderer {
   player?: Player;
   destroy(): void;
-  initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void>;
+  initialize(
+    container: HTMLElement,
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void>;
   moveTo(
     index: MeasureIndex,
     start: MillisecsTimestamp,
@@ -24,9 +28,6 @@ export interface ISheetRenderer {
     duration?: MillisecsTimestamp,
   ): void;
   onResize(): void;
-  onEvent(
-    type: keyof GlobalEventHandlersEventMap,
-    event: Event
-  ): void;
+  onEvent(type: keyof GlobalEventHandlersEventMap, event: Event): void;
   get version(): string;
 }

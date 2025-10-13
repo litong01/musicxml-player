@@ -11,7 +11,10 @@ import { assertIsDefined } from './helpers';
  * @see https://book.verovio.org/toolkit-reference/toolkit-methods.html#rendertosvg
  * @see https://book.verovio.org/toolkit-reference/toolkit-methods.html#rendertotimemap
  */
-export class VerovioRenderer extends VerovioRendererBase implements ISheetRenderer {
+export class VerovioRenderer
+  extends VerovioRendererBase
+  implements ISheetRenderer
+{
   protected _vrv?: VerovioToolkitFixed;
   protected _vrvOptions: VerovioOptionsFixed = {};
 
@@ -25,7 +28,11 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
     this._vrv?.destroy();
   }
 
-  async initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void> {
+  async initialize(
+    container: HTMLElement,
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
     this._container = container;
     this._options = options;
 
@@ -40,8 +47,8 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
         spacingNonLinear: options.horizontal ? 1.0 : 0.6,
         spacingLinear: options.horizontal ? 0.04 : 0.25,
       },
-      ...this._vrvOptions
-    }
+      ...this._vrvOptions,
+    };
 
     // Create the Verovio toolkit.
     const VerovioModule = await createVerovioModule();
@@ -72,17 +79,17 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
       this._currentLocation.index,
       this._currentLocation.start,
       this._currentLocation.offset,
-      this._currentLocation.duration
+      this._currentLocation.duration,
     );
   }
 
-  onEvent(type: string): void {
+  onEvent(): void {
     this._refresh();
     this._move(
       this._currentLocation.index,
       this._currentLocation.start,
       this._currentLocation.offset,
-      this._currentLocation.duration
+      this._currentLocation.duration,
     );
   }
 
@@ -111,10 +118,13 @@ export class VerovioRenderer extends VerovioRendererBase implements ISheetRender
     for (let i = 0; i < this._vrv.getPageCount(); i++) {
       svgs.push(this._vrv.renderToSVG(i + 1));
     }
-    const timemap = this._vrv.renderToTimemap({ includeMeasures: true, includeRests: true });
+    const timemap = this._vrv.renderToTimemap({
+      includeMeasures: true,
+      includeRests: true,
+    });
 
     // Delete existing pages and calculate from scratch.
-    this._container.querySelectorAll('.sheet-page').forEach(e => e.remove());
+    this._container.querySelectorAll('.sheet-page').forEach((e) => e.remove());
     this._recalculate(timemap, svgs);
   }
 }

@@ -5,9 +5,7 @@ export class VerovioConverterBase {
   /**
    * Parse a Verovio timemap into our timemap.
    */
-  protected static _parseTimemap(
-    entries: TimeMapEntryFixed[],
-  ): MeasureTimemap {
+  protected static _parseTimemap(entries: TimeMapEntryFixed[]): MeasureTimemap {
     const timemap: MeasureTimemap = [];
     let tstamp = 0;
     entries.forEach((event) => {
@@ -15,8 +13,7 @@ export class VerovioConverterBase {
       if ('measureOn' in event) {
         const i = timemap.length;
         if (i > 0) {
-          timemap[i - 1].duration =
-            event.tstamp - timemap[i - 1].timestamp;
+          timemap[i - 1].duration = event.tstamp - timemap[i - 1].timestamp;
         }
         timemap.push({
           measure: i,

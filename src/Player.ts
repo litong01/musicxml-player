@@ -7,7 +7,7 @@ import {
   unrollMusicXml,
   MusicXmlParseResult,
   fetish,
-  debounce
+  debounce,
 } from './helpers';
 import type { IMIDIConverter } from './IMIDIConverter';
 import type { ISheetRenderer } from './ISheetRenderer';
@@ -22,7 +22,7 @@ export type MillisecsTimestamp = number;
 export enum PlayerState {
   Stopped = 0,
   Playing,
-  Paused
+  Paused,
 }
 
 /**
@@ -102,9 +102,12 @@ export interface PlayerOptions {
 }
 
 const DEFAULT_PLAYER_OPTIONS = {
-  soundfontUri: 'https://spessasus.github.io/SpessaSynth/soundfonts/GeneralUserGS.sf3',
-  unrollXslUri: 'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/unroll.sef.json',
-  timemapXslUri: 'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
+  soundfontUri:
+    'https://spessasus.github.io/SpessaSynth/soundfonts/GeneralUserGS.sf3',
+  unrollXslUri:
+    'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/unroll.sef.json',
+  timemapXslUri:
+    'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
   output: null,
   unroll: false,
   mute: false,
@@ -112,7 +115,7 @@ const DEFAULT_PLAYER_OPTIONS = {
   velocity: 1,
   horizontal: false,
   followCursor: true,
-}
+};
 
 export class Player {
   /**
@@ -155,11 +158,15 @@ export class Player {
       // Create the synth element.
       const context = new AudioContext();
       //await context.audioWorklet.addModule(new URL('helpers/spessasynth_processor.ts', import.meta.url));
-      await context.audioWorklet.addModule(new URL('spessasynth_processor.js', import.meta.url));
-      const soundfont = await (await fetish(options.soundfontUri)).arrayBuffer();
+      await context.audioWorklet.addModule(
+        new URL('spessasynth_processor.js', import.meta.url),
+      );
+      const soundfont = await (
+        await fetish(options.soundfontUri)
+      ).arrayBuffer();
       const synth = new Synthetizer(context);
       synth.connect(context.destination);
-      await synth.soundBankManager.addSoundBank(soundfont, "main");
+      await synth.soundBankManager.addSoundBank(soundfont, 'main');
 
       // Initialize the various objects.
       // It's too bad that constructors cannot be made async because that would simplify the code.
@@ -187,7 +194,7 @@ export class Player {
     protected _parseResult: MusicXmlParseResult,
     protected _musicXml: string,
     protected _synthesizer: Synthetizer,
-    protected _context: AudioContext
+    protected _context: AudioContext,
   ) {
     // Inform the renderer that we're here.
     this._options.renderer.player = this;
@@ -208,14 +215,20 @@ export class Player {
     this._sequencer.loopCount = this._options.repeat;
 
     // Handling DOM events.
-    this._observer = new ResizeObserver(debounce(() => {
-      this._options.renderer.onResize();
-    }, DEBOUNCE_THROTTLE));
+    this._observer = new ResizeObserver(
+      debounce(() => {
+        this._options.renderer.onResize();
+      }, DEBOUNCE_THROTTLE),
+    );
     this._observer.observe(this._sheet);
     this._abortController = new AbortController();
-    window.addEventListener('scroll', debounce((event) => {
-      this._options.renderer.onEvent('scroll', event);
-    }, 0), { signal: this._abortController.signal });
+    window.addEventListener(
+      'scroll',
+      debounce((event) => {
+        this._options.renderer.onEvent('scroll', event);
+      }, 0),
+      { signal: this._abortController.signal },
+    );
   }
 
   /**
@@ -258,7 +271,8 @@ export class Player {
       })
       .last();
     if (entry) {
-      this._sequencer.currentTime = (entry.timestamp + measureOffset - 1) / 1000;
+      this._sequencer.currentTime =
+        (entry.timestamp + measureOffset - 1) / 1000;
     }
 
     // Set the cursor position.
@@ -310,7 +324,7 @@ export class Player {
       this._state = PlayerState.Playing;
       requestAnimationFrame(synchronizeMidi);
       this._sequencer.play();
-    })
+    });
   }
 
   /**
@@ -397,7 +411,7 @@ export class Player {
    * A flag to mute the player's MIDI output.
    */
   set mute(value: boolean) {
-    for (let i=0; i<this._synthesizer.channelsAmount; i++) {
+    for (let i = 0; i < this._synthesizer.channelsAmount; i++) {
       this._synthesizer.muteChannel(i, value);
     }
   }
@@ -425,8 +439,13 @@ export class Player {
    */
   protected static _adjustMidiDuration(converter: IMIDIConverter): BasicMIDI {
     const midi = BasicMIDI.fromArrayBuffer(converter.midi);
-    const duration = converter.timemap.reduce((duration, entry) => duration + entry.duration, 0);
-    const ticks = Math.round(duration / (60000 / midi.tempoChanges[0].tempo / midi.timeDivision));
+    const duration = converter.timemap.reduce(
+      (duration, entry) => duration + entry.duration,
+      0,
+    );
+    const ticks = Math.round(
+      duration / (60000 / midi.tempoChanges[0].tempo / midi.timeDivision),
+    );
     midi.tracks[0].pushEvent({
       ticks,
       statusByte: midiMessageTypes.controllerChange,

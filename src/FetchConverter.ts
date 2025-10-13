@@ -21,7 +21,10 @@ export class FetchConverter implements IMIDIConverter {
     protected _timemapOrUri?: MeasureTimemap | string,
   ) {}
 
-  async initialize(musicXml: string, options: Required<PlayerOptions>): Promise<void> {
+  async initialize(
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
     this._midi =
       typeof this._midiOrUri === 'string'
         ? await (await fetish(this._midiOrUri)).arrayBuffer()

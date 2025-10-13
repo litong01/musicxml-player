@@ -22,7 +22,10 @@ export class MmaConverter implements IMIDIConverter {
     this._uri = uri.endsWith('/') ? uri.slice(0, -1) : uri;
   }
 
-  async initialize(musicXml: string, options: Required<PlayerOptions>): Promise<void> {
+  async initialize(
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
     // First get the API version.
     this._version = await (await fetish(`${this._uri}/`)).json();
 

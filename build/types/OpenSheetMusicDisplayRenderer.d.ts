@@ -17,7 +17,7 @@ export declare class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     constructor(osmdOptions?: IOSMDOptions, _engravingOptions?: EngravingRulesOptions | undefined);
     destroy(): void;
     initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void>;
-    moveTo(index: MeasureIndex, _start: MillisecsTimestamp, offset: MillisecsTimestamp, _duration?: MillisecsTimestamp): void;
+    moveTo(index: MeasureIndex, _start: MillisecsTimestamp, offset: MillisecsTimestamp): void;
     onResize(): void;
     onEvent(): void;
     get version(): string;

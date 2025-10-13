@@ -1,7 +1,11 @@
 import { ISheetRenderer } from './ISheetRenderer';
 import { TimeMapEntryFixed } from './VerovioTypes';
 import { VerovioRendererBase } from './VerovioRendererBase';
-import { PlayerState, type MeasureIndex, type MillisecsTimestamp, type PlayerOptions } from './Player';
+import {
+  type MeasureIndex,
+  type MillisecsTimestamp,
+  type PlayerOptions,
+} from './Player';
 import { fetish } from './helpers';
 import pkg from '../package.json';
 
@@ -10,7 +14,10 @@ import pkg from '../package.json';
  * - SVG files as obtained by `verovio --xml-id-checksum -t svg /path/to/score.musicxml`
  * - Timemap JSON file as obtained by `verovio --xml-id-checksum -t timemap --timemap-options '{ "includeMeasures": true, "includeRests": true }' /path/to/score.musicxml`
  */
-export class VerovioStaticRenderer extends VerovioRendererBase implements ISheetRenderer {
+export class VerovioStaticRenderer
+  extends VerovioRendererBase
+  implements ISheetRenderer
+{
   constructor(
     protected _svgOrUris: Array<ArrayBuffer | string>,
     protected _eventsOrUri: TimeMapEntryFixed[] | string,
@@ -22,17 +29,23 @@ export class VerovioStaticRenderer extends VerovioRendererBase implements ISheet
     this._cursor.destroy();
   }
 
-  async initialize(container: HTMLElement, _musicXml: string, options: PlayerOptions) {
+  async initialize(
+    container: HTMLElement,
+    _musicXml: string,
+    options: PlayerOptions,
+  ) {
     this._container = container;
     this._options = options;
 
     // Fetch the files.
     const enc = new TextDecoder('utf-8');
-    const svgs = await Promise.all(this._svgOrUris.map(async (svgOrUri) =>
-      typeof svgOrUri === 'string'
-        ? await (await fetish(svgOrUri)).text()
-        : enc.decode(svgOrUri)
-    ));
+    const svgs = await Promise.all(
+      this._svgOrUris.map(async (svgOrUri) =>
+        typeof svgOrUri === 'string'
+          ? await (await fetish(svgOrUri)).text()
+          : enc.decode(svgOrUri),
+      ),
+    );
     const timemap =
       typeof this._eventsOrUri === 'string'
         ? await (await fetish(this._eventsOrUri)).json()
@@ -61,7 +74,7 @@ export class VerovioStaticRenderer extends VerovioRendererBase implements ISheet
       this._currentLocation.index,
       this._currentLocation.start,
       this._currentLocation.offset,
-      this._currentLocation.duration
+      this._currentLocation.duration,
     );
   }
 
@@ -71,7 +84,7 @@ export class VerovioStaticRenderer extends VerovioRendererBase implements ISheet
       this._currentLocation.index,
       this._currentLocation.start,
       this._currentLocation.offset,
-      this._currentLocation.duration
+      this._currentLocation.duration,
     );
   }
 

@@ -1,6 +1,11 @@
 import type { ISheetRenderer } from './ISheetRenderer';
 import { MuseScoreDownloader, MuseScoreBase } from './MuseScoreBase';
-import type { MeasureIndex, MillisecsTimestamp, Player, PlayerOptions } from './Player';
+import type {
+  MeasureIndex,
+  MillisecsTimestamp,
+  Player,
+  PlayerOptions,
+} from './Player';
 import { Cursor } from './Cursor';
 import { assertIsDefined, binarySearch } from './helpers';
 import SaxonJS from './saxon-js/SaxonJS3.rt';
@@ -47,7 +52,11 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
     this._cursor.destroy();
   }
 
-  async initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void> {
+  async initialize(
+    container: HTMLElement,
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
     this._container = container;
 
     // Extract the metadata in the base class.
@@ -126,7 +135,9 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
       page.addEventListener('click', (event) => {
         assertIsDefined(this._container);
         const rectContainer = this._container.getBoundingClientRect();
-        const factor = page.getAttribute('data-width') ? rectContainer.width / Number(page.getAttribute('data-width')) : 1;
+        const factor = page.getAttribute('data-width')
+          ? rectContainer.width / Number(page.getAttribute('data-width'))
+          : 1;
         const segment = this._segments!.find((segment) => {
           return (
             segment.x * factor <= event.offsetX &&
@@ -166,7 +177,6 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
     index: MeasureIndex,
     start: MillisecsTimestamp,
     offset: MillisecsTimestamp,
-    _duration?: MillisecsTimestamp,
   ): void {
     assertIsDefined(this._measures);
     assertIsDefined(this._segments);
@@ -195,12 +205,18 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
     // Move the cursor to this position.
     assertIsDefined(this._container);
     const rectContainer = this._container.getBoundingClientRect();
-    const page = document.getElementById(`page-${this._segments[sindex].page}`)!;
-    const factor = page.getAttribute('data-width') ? rectContainer.width / Number(page.getAttribute('data-width')) : 1;
+    const page = document.getElementById(
+      `page-${this._segments[sindex].page}`,
+    )!;
+    const factor = page.getAttribute('data-width')
+      ? rectContainer.width / Number(page.getAttribute('data-width'))
+      : 1;
     this._cursor.moveTo(
       this._segments[sindex].x * factor,
-      this._segments[sindex].y * factor - (this._measures[index].sy * factor / 2) + rectContainer.top,
-      this._measures[index].sy * factor * 2
+      this._segments[sindex].y * factor -
+        (this._measures[index].sy * factor) / 2 +
+        rectContainer.top,
+      this._measures[index].sy * factor * 2,
     );
   }
 

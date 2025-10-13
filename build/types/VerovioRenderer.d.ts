@@ -15,7 +15,7 @@ export declare class VerovioRenderer extends VerovioRendererBase implements IShe
     initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void>;
     moveTo(index: MeasureIndex, start: MillisecsTimestamp, offset: MillisecsTimestamp, duration?: MillisecsTimestamp): void;
     onResize(): void;
-    onEvent(type: string): void;
+    onEvent(): void;
     get version(): string;
     protected _redraw(): void;
 }

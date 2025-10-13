@@ -1,3 +1,3 @@
-import { initializeWorkletProcessor} from 'spessasynth_lib';
+import { initializeWorkletProcessor } from 'spessasynth_lib';
 
 initializeWorkletProcessor();

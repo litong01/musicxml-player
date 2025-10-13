@@ -1,6 +1,11 @@
 import { assertIsDefined } from './helpers';
 import type { ISheetRenderer } from './ISheetRenderer';
-import type { MeasureIndex, MillisecsTimestamp, Player, PlayerOptions } from './Player';
+import type {
+  MeasureIndex,
+  MillisecsTimestamp,
+  Player,
+  PlayerOptions,
+} from './Player';
 import {
   Fraction,
   IOSMDOptions,
@@ -39,7 +44,11 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     this._osmd = undefined;
   }
 
-  async initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void> {
+  async initialize(
+    container: HTMLElement,
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
     // Adjust options based on PlayerOptions.
     this._osmdOptions = {
       ...{
@@ -52,10 +61,10 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
         followCursor: true,
         disableCursor: false,
         autoResize: false,
-        renderSingleHorizontalStaffline: options.horizontal
+        renderSingleHorizontalStaffline: options.horizontal,
       },
-      ...this._osmdOptions
-    }
+      ...this._osmdOptions,
+    };
 
     // Create the OSMD toolkit.
     this._osmd = new OpenSheetMusicDisplay(container, this._osmdOptions);
@@ -81,7 +90,6 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     index: MeasureIndex,
     _start: MillisecsTimestamp,
     offset: MillisecsTimestamp,
-    _duration?: MillisecsTimestamp,
   ): void {
     assertIsDefined(this._osmd);
     const measure = this._osmd.Sheet.SourceMeasures[index];
@@ -144,7 +152,7 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     // Setup event listeners for target stave notes to position the cursor.
     this._osmd.GraphicSheet.MeasureList?.forEach((measureGroup, index) => {
       measureGroup?.forEach((measure) => {
-        measure?.staffEntries?.forEach((se, _v) => {
+        measure?.staffEntries?.forEach((se) => {
           se.graphicalVoiceEntries?.forEach((gve) => {
             const vfve = <VexFlowVoiceEntry>gve;
             (<HTMLElement>(

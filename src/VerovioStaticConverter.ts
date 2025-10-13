@@ -10,7 +10,10 @@ import { PlayerOptions } from './Player';
  * - MIDI file as obtained by `verovio --xml-id-checksum -t midi /path/to/score.musicxml`
  * - Timemap JSON file as obtained by `verovio --xml-id-checksum -t timemap --timemap-options '{ "includeMeasures": true, "includeRests": true }' /path/to/score.musicxml`
  */
-export class VerovioStaticConverter extends VerovioConverterBase implements IMIDIConverter {
+export class VerovioStaticConverter
+  extends VerovioConverterBase
+  implements IMIDIConverter
+{
   protected _timemap?: MeasureTimemap;
   protected _midi?: ArrayBuffer;
 
@@ -30,7 +33,9 @@ export class VerovioStaticConverter extends VerovioConverterBase implements IMID
       typeof this._timemapOrUri === 'undefined'
         ? await parseMusicXmlTimemap(musicXml, options.timemapXslUri)
         : typeof this._timemapOrUri === 'string'
-          ? VerovioConverterBase._parseTimemap(await (await fetish(this._timemapOrUri)).json())
+          ? VerovioConverterBase._parseTimemap(
+              await (await fetish(this._timemapOrUri)).json(),
+            )
           : VerovioConverterBase._parseTimemap(this._timemapOrUri);
   }
 

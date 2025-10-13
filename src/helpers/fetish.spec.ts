@@ -36,5 +36,3 @@ describe('fetish', () => {
     await expect(fetish('call(1)')).resolves.toBeDefined();
   });
 });
-
-
