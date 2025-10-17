@@ -1,4 +1,4 @@
-import type { MeasureIndex, MillisecsTimestamp, PlayerOptions } from './Player';
+import type { MeasureIndex, MillisecsTimestamp, PlayerOptions } from '../Player';
 export type MeasureTimemapEntry = {
     measure: MeasureIndex;
     timestamp: MillisecsTimestamp;

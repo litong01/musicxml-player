@@ -1,7 +1,11 @@
-import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
+import pkg from '../package.json';
+import type {
+  IMIDIConverter,
+  MeasureTimemap,
+} from './interfaces/IMIDIConverter';
 import { MuseScoreDownloader, MuseScoreBase } from './MuseScoreBase';
 import { assertIsDefined } from './helpers';
-import pkg from '../package.json';
+import type { PlayerOptions } from './Player';
 
 /**
  * Implementation of IMIDIConverter that uses MuseScore to generate the MIDI and timemap structures.
@@ -16,8 +20,11 @@ export class MuseScoreConverter
     super(downloader);
   }
 
-  async initialize(musicXml: string): Promise<void> {
-    return this._extract(musicXml);
+  async initialize(
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
+    return this._extract(musicXml, options);
   }
 
   get midi(): ArrayBuffer {

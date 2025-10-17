@@ -1,4 +1,4 @@
-import type { ISheetRenderer } from './ISheetRenderer';
+import type { ISheetRenderer } from './interfaces/ISheetRenderer';
 import type { MeasureIndex, MillisecsTimestamp, Player, PlayerOptions } from './Player';
 import { Fraction, IOSMDOptions, OpenSheetMusicDisplay, SourceMeasure, EngravingRules } from 'opensheetmusicdisplay';
 export type EngravingRulesOptions = {

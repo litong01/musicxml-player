@@ -1,4 +1,5 @@
-import type { MeasureTimemap } from './IMIDIConverter';
+import type { PlayerOptions } from './Player';
+import type { MeasureTimemap } from './interfaces/IMIDIConverter';
 export type MuseScoreDownloader = (musicXml: string) => {
     pngs?: string[];
     svgs: string[];
@@ -64,6 +65,6 @@ export declare class MuseScoreBase {
     protected _timemap?: MeasureTimemap;
     protected _mpos?: object;
     constructor(_downloader: string | MuseScoreDownloader | ReturnType<MuseScoreDownloader>);
-    protected _extract(musicXml: string): Promise<void>;
+    protected _extract(musicXml: string, options: Required<PlayerOptions>): Promise<void>;
 }
 //# sourceMappingURL=MuseScoreBase.d.ts.map

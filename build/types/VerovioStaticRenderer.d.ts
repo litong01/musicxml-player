@@ -1,4 +1,4 @@
-import { ISheetRenderer } from './ISheetRenderer';
+import { ISheetRenderer } from './interfaces/ISheetRenderer';
 import { TimeMapEntryFixed } from './VerovioTypes';
 import { VerovioRendererBase } from './VerovioRendererBase';
 import { type MeasureIndex, type MillisecsTimestamp, type PlayerOptions } from './Player';
@@ -15,7 +15,7 @@ export declare class VerovioStaticRenderer extends VerovioRendererBase implement
     initialize(container: HTMLElement, _musicXml: string, options: PlayerOptions): Promise<void>;
     moveTo(index: MeasureIndex, start: MillisecsTimestamp, offset: MillisecsTimestamp, duration?: MillisecsTimestamp): void;
     onResize(): void;
-    onEvent(): void;
+    onEvent(_type: string): void;
     get version(): string;
 }
 //# sourceMappingURL=VerovioStaticRenderer.d.ts.map

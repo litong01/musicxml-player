@@ -1,6 +1,6 @@
-import type { MeasureTimemap } from './IMIDIConverter';
+import type { PlayerOptions } from './Player';
+import type { MeasureTimemap } from './interfaces/IMIDIConverter';
 import { atoab, fetish } from './helpers';
-import SaxonJS from './saxon-js/SaxonJS3.rt';
 
 export type MuseScoreDownloader = (musicXml: string) => {
   pngs?: string[];
@@ -74,7 +74,10 @@ export class MuseScoreBase {
       | ReturnType<MuseScoreDownloader>,
   ) {}
 
-  protected async _extract(musicXml: string): Promise<void> {
+  protected async _extract(
+    musicXml: string,
+    options: Required<PlayerOptions>,
+  ): Promise<void> {
     // Retrieve MuseScore metadata.
     // ...given a URL: Download the score media.
     if (typeof this._downloader === 'string') {
@@ -99,12 +102,11 @@ export class MuseScoreBase {
 
     // Parse and create the timemap.
     this._timemap = [];
-    this._mpos = await SaxonJS.getResource({
-      type: 'xml',
-      encoding: 'utf8',
+
+    this._mpos = await options.xsltProcessor.parse({
       text: window.atob(this._mscore.mposXML),
     });
-    (<any[]>SaxonJS.XPath.evaluate('//events/event', this._mpos)).forEach(
+    (<any[]>options.xsltProcessor.query('//events/event', this._mpos)).forEach(
       (measure, i) => {
         const timestamp = parseInt(measure.getAttribute('position'));
         if (i > 0) {
@@ -120,6 +122,7 @@ export class MuseScoreBase {
     );
 
     // Compute last measure duration by getting total duration minus last measure onset.
+    // WARNING this is a polyfill added by opensheetmusicdisplay
     this._timemap.last().duration =
       this._mscore.metadata.duration * 1000 - this._timemap.last().timestamp;
   }

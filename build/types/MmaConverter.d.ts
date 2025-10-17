@@ -1,4 +1,4 @@
-import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
+import type { IMIDIConverter, MeasureTimemap } from './interfaces/IMIDIConverter';
 import { PlayerOptions } from './Player';
 /**
  * Implementation of IMIDIConverter that queries the musicxml-midi API (@see https://github.com/infojunkie/musicxml-midi)

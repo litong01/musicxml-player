@@ -1,9 +1,10 @@
 /// <reference types="webmidi" />
+import type { IMIDIConverter } from './interfaces/IMIDIConverter';
+import type { ISheetRenderer } from './interfaces/ISheetRenderer';
+import type { IXSLTProcessor } from './interfaces/IXSLTProcessor';
 import { BasicMIDI } from 'spessasynth_core';
 import { WorkletSynthesizer as Synthetizer, Sequencer } from 'spessasynth_lib';
 import { MusicXmlParseResult } from './helpers';
-import type { IMIDIConverter } from './IMIDIConverter';
-import type { ISheetRenderer } from './ISheetRenderer';
 export type MeasureIndex = number;
 export type MillisecsTimestamp = number;
 export declare enum PlayerState {
@@ -85,6 +86,11 @@ export interface PlayerOptions {
      * Optional, default: true
      */
     followCursor?: boolean;
+    /**
+     * XSLT processor instance for XML processing.
+     * Optional, default: new SaxonJSAdapter()
+     */
+    xsltProcessor?: IXSLTProcessor;
 }
 export declare class Player {
     protected _options: Required<PlayerOptions>;

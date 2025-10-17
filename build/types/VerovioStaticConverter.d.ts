@@ -1,7 +1,7 @@
-import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
+import type { IMIDIConverter, MeasureTimemap } from './interfaces/IMIDIConverter';
 import type { TimeMapEntryFixed } from './VerovioTypes';
-import { VerovioConverterBase } from './VerovioConverterBase';
 import { PlayerOptions } from './Player';
+import { VerovioConverterBase } from './VerovioConverterBase';
 /**
  * Implementation of IMIDIConverter that uses statically-rendered Verovio assets:
  * - MIDI file as obtained by `verovio --xml-id-checksum -t midi /path/to/score.musicxml`

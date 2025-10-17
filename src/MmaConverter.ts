@@ -1,6 +1,9 @@
-import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
-import { assertIsDefined, fetish, parseMusicXmlTimemap } from './helpers';
+import type {
+  IMIDIConverter,
+  MeasureTimemap,
+} from './interfaces/IMIDIConverter';
 import { PlayerOptions } from './Player';
+import { assertIsDefined, fetish, parseMusicXmlTimemap } from './helpers';
 
 /**
  * Implementation of IMIDIConverter that queries the musicxml-midi API (@see https://github.com/infojunkie/musicxml-midi)
@@ -42,7 +45,11 @@ export class MmaConverter implements IMIDIConverter {
       body: formData,
     });
     this._midi = await response.arrayBuffer();
-    this._timemap = await parseMusicXmlTimemap(musicXml, options.timemapXslUri);
+    this._timemap = await parseMusicXmlTimemap(
+      musicXml,
+      options.timemapXslUri,
+      options.xsltProcessor,
+    );
   }
 
   get midi(): ArrayBuffer {

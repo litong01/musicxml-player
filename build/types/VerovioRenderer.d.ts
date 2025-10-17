@@ -1,7 +1,7 @@
-import type { ISheetRenderer } from './ISheetRenderer';
+import type { ISheetRenderer } from './interfaces/ISheetRenderer';
 import type { MeasureIndex, MillisecsTimestamp, PlayerOptions } from './Player';
-import { VerovioRendererBase } from './VerovioRendererBase';
 import { VerovioOptionsFixed, VerovioToolkitFixed } from './VerovioTypes';
+import { VerovioRendererBase } from './VerovioRendererBase';
 /**
  * Implementation of ISheetRenderer that uses Verovio to convert a MusicXML file to SVGs and timemap.
  * @see https://book.verovio.org/toolkit-reference/toolkit-methods.html#rendertosvg

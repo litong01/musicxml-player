@@ -1,6 +1,8 @@
 import createVerovioModule from 'verovio/wasm';
-import { VerovioToolkit } from 'verovio/esm';
-import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
+import type {
+  IMIDIConverter,
+  MeasureTimemap,
+} from './interfaces/IMIDIConverter';
 import type { VerovioOptionsFixed, VerovioToolkitFixed } from './VerovioTypes';
 import { VerovioConverterBase } from './VerovioConverterBase';
 import {
@@ -10,6 +12,7 @@ import {
   parseMusicXmlTimemap,
 } from './helpers';
 import type { PlayerOptions } from './Player';
+import { VerovioToolkit } from 'verovio/esm';
 
 /**
  * Implementation of IMIDIConverter that uses Verovio to convert a MusicXML file to MIDI and timemap.
@@ -50,14 +53,22 @@ export class VerovioConverter
 
     // Build timemap.
     // FIXME! Restore Verovio parsing when it's able to unroll a MusicXML score on its own.
-    this._timemap = await parseMusicXmlTimemap(musicXml, options.timemapXslUri);
+    this._timemap = await parseMusicXmlTimemap(
+      musicXml,
+      options.timemapXslUri,
+      options.xsltProcessor,
+    );
     // this._timemap = VerovioConverterBase._parseTimemap(
     //   this._vrv.renderToTimemap({ includeMeasures: true, includeRests: true })
     // );
 
     // Unroll score and render to MIDI.
     // FIXME! No longer needed when Verovio is able to unroll a MusicXML score on its own.
-    const unrolled = await unrollMusicXml(musicXml, options.unrollXslUri);
+    const unrolled = await unrollMusicXml(
+      musicXml,
+      options.unrollXslUri,
+      options.xsltProcessor,
+    );
     this._vrv.loadData(unrolled);
     this._midi = atoab(this._vrv.renderToMIDI());
   }

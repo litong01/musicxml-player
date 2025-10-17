@@ -1,7 +1,7 @@
-import { MeasureTimemapEntry } from './IMIDIConverter';
 import type { MeasureIndex, MillisecsTimestamp, Player, PlayerOptions } from './Player';
-import { Cursor } from './Cursor';
 import type { TimeMapEntryFixed } from './VerovioTypes';
+import { Cursor } from './Cursor';
+import { MeasureTimemapEntry } from './interfaces/IMIDIConverter';
 export declare class VerovioRendererBase {
     player?: Player;
     protected _options?: PlayerOptions;

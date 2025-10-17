@@ -1,4 +1,4 @@
-import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
+import type { IMIDIConverter, MeasureTimemap } from './interfaces/IMIDIConverter';
 import { PlayerOptions } from './Player';
 /**
  * Implementation of IMIDIConverter that simply fetches given MIDI file and timemap JSON file URIs.

@@ -1,4 +1,5 @@
-import { ISheetRenderer } from './ISheetRenderer';
+import pkg from '../package.json';
+import { ISheetRenderer } from './interfaces/ISheetRenderer';
 import { TimeMapEntryFixed } from './VerovioTypes';
 import { VerovioRendererBase } from './VerovioRendererBase';
 import {
@@ -7,7 +8,6 @@ import {
   type PlayerOptions,
 } from './Player';
 import { fetish } from './helpers';
-import pkg from '../package.json';
 
 /**
  * Implementation of ISheetRenderer that uses statically-rendered Verovio assets:
@@ -78,7 +78,7 @@ export class VerovioStaticRenderer
     );
   }
 
-  onEvent(): void {
+  onEvent(_type: string): void {
     this._refresh();
     this.moveTo(
       this._currentLocation.index,

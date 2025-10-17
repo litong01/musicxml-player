@@ -1,4 +1,4 @@
-import type { IMIDIConverter, MeasureTimemap } from './IMIDIConverter';
+import type { IMIDIConverter, MeasureTimemap } from './interfaces/IMIDIConverter';
 import type { VerovioOptionsFixed, VerovioToolkitFixed } from './VerovioTypes';
 import { VerovioConverterBase } from './VerovioConverterBase';
 import type { PlayerOptions } from './Player';

@@ -1,4 +1,4 @@
-import type { ISheetRenderer } from './ISheetRenderer';
+import type { ISheetRenderer } from './interfaces/ISheetRenderer';
 import { MuseScoreDownloader, MuseScoreBase } from './MuseScoreBase';
 import type {
   MeasureIndex,
@@ -8,7 +8,6 @@ import type {
 } from './Player';
 import { Cursor } from './Cursor';
 import { assertIsDefined, binarySearch } from './helpers';
-import SaxonJS from './saxon-js/SaxonJS3.rt';
 import pkg from '../package.json';
 
 // Constant to convert incoming coordinates in DPI into pixels.
@@ -60,14 +59,14 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
     this._container = container;
 
     // Extract the metadata in the base class.
-    await this._extract(musicXml);
+    await this._extract(musicXml, options);
     assertIsDefined(this._mscore);
 
     // Store information we'll need later:
     // - Measures space positions
     // - Segments (musical events) space and time positions
     this._measures = (<any[]>(
-      SaxonJS.XPath.evaluate('//elements/element', this._mpos)
+      options.xsltProcessor.query('//elements/element', this._mpos)
     )).map((element) => {
       return {
         x: parseInt(element.getAttribute('x')) / DOTS_PER_PIXEL,
@@ -77,13 +76,12 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
         page: parseInt(element.getAttribute('page')),
       };
     });
-    const spos = await SaxonJS.getResource({
-      type: 'xml',
-      encoding: 'utf8',
+
+    const spos = await options.xsltProcessor.parse({
       text: window.atob(this._mscore.sposXML),
     });
     this._segments = (<any[]>(
-      SaxonJS.XPath.evaluate('//elements/element', spos)
+      options.xsltProcessor.query('//elements/element', spos)
     )).map((element) => {
       return {
         x: parseInt(element.getAttribute('x')) / DOTS_PER_PIXEL,
@@ -96,7 +94,7 @@ export class MuseScoreRenderer extends MuseScoreBase implements ISheetRenderer {
         measure: 0,
       };
     });
-    (<any[]>SaxonJS.XPath.evaluate('//events/event', spos)).forEach(
+    (<any[]>options.xsltProcessor.query('//events/event', spos)).forEach(
       (segment, i) => {
         const timestamp = parseInt(segment.getAttribute('position'));
         if (i > 0) {

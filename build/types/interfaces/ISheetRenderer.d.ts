@@ -1,4 +1,4 @@
-import type { MeasureIndex, MillisecsTimestamp, PlayerOptions, Player } from './Player';
+import type { MeasureIndex, MillisecsTimestamp, PlayerOptions, Player } from '../Player';
 /**
  * Interface to a MusicXML sheet renderer.
  *
