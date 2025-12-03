@@ -11,6 +11,7 @@ import {
   MmaConverter,
   FetchConverter,
   parseMusicXml,
+  SaxonJSProcessor,
 } from './build/musicxml-player.mjs';
 import {
   Playlist,
@@ -371,7 +372,7 @@ function handleSheetSelect(e) {
 
 async function handleFileBuffer(filename, buffer) {
   try {
-    const parseResult = await parseMusicXml(buffer);
+    const parseResult = await parseMusicXml(buffer, new SaxonJSProcessor());
     g_state.musicXml = parseResult.musicXml;
     g_state.params.set('sheet', filename);
     createPlayer();
@@ -386,7 +387,6 @@ async function handleFileBuffer(filename, buffer) {
     }
   }
 }
-
 async function handleFileUpload(e) {
   const reader = new FileReader();
   const file = e.target.files[0];

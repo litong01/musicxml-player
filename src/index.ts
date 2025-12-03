@@ -5,6 +5,7 @@ export * from './MuseScoreConverter';
 export * from './MuseScoreRenderer';
 export * from './OpenSheetMusicDisplayRenderer';
 export * from './Player';
+export * from './SaxonJSProcessor';
 export * from './VerovioConverter';
 export * from './VerovioRenderer';
 export * from './VerovioStaticConverter';
