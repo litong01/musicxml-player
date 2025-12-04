@@ -14,11 +14,18 @@ export async function parseMusicXml(
 ): Promise<MusicXmlParseResult> {
   if (musicXmlOrBuffer instanceof ArrayBuffer) {
     // Decode the buffer and try it as an uncompressed document.
-    const musicXml = new TextDecoder().decode(musicXmlOrBuffer);
+    let musicXml = new TextDecoder().decode(musicXmlOrBuffer);
+    
+    // Remove DOCTYPE declaration to avoid external DTD fetching issues
+    musicXml = musicXml.replace(/<!DOCTYPE[^>]*>/i, '');
+    
     try {
       return await _parseUncompressed(musicXml, xsltProcessor, queries);
-    } catch {
-      // Do nothing: just keep going.
+    } catch (error) {
+      // If it looks like XML, don't try compressed parsing
+      if (musicXml.trim().startsWith('<?xml')) {
+        throw error;
+      }
     }
 
     // Try the buffer as a compressed document.

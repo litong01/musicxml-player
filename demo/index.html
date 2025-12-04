@@ -71,9 +71,10 @@
     </div>
 
     <div>
-      <label for="upload">Or upload a MusicXML file or an iReal Pro playlist</label>&nbsp;
-      <input type="file" id="upload" name="upload"/>
+      <label for="upload">Or upload MusicXML (+ optional MIDI file)</label>&nbsp;
+      <input type="file" id="upload" name="upload" multiple accept=".musicxml,.mxl,.xml,.mid"/>
       <span id="error"></span>
+      <br><small style="color: #666;">Tip: Upload both .musicxml and .mid for best results with percussion notes</small>
     </div>
 
     <div>

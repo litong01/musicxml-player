@@ -6,7 +6,7 @@ import type { IXSLTProcessor } from './interfaces/IXSLTProcessor';
 import { BasicMIDI } from 'spessasynth_core';
 import { SaxonJSProcessor } from './SaxonJSProcessor';
 import { WorkletSynthesizer as Synthetizer, Sequencer } from 'spessasynth_lib';
-import { midiMessageTypes } from 'spessasynth_core';
+// import { midiMessageTypes } from 'spessasynth_core';
 import {
   binarySearch,
   parseMusicXml,
@@ -228,7 +228,14 @@ export class Player {
     if (this._options.output) {
       this._sequencer.connectMIDIOutput(this._options.output);
     }
-    this._sequencer.loadNewSongList([{ binary: this._midi.writeMIDI() }]);
+    
+    const midiArrayBuffer = this._midi.writeMIDI();
+    
+    // CRITICAL: writeMIDI() is destructive - it clears the events from tracks
+    // We must recreate the BasicMIDI from the ArrayBuffer to get events back
+    this._midi = BasicMIDI.fromArrayBuffer(midiArrayBuffer);
+    
+    this._sequencer.loadNewSongList([{ binary: midiArrayBuffer }]);
 
     // Initialize the playback options.
     this.mute = this._options.mute;
@@ -461,19 +468,22 @@ export class Player {
    */
   protected static _adjustMidiDuration(converter: IMIDIConverter): BasicMIDI {
     const midi = BasicMIDI.fromArrayBuffer(converter.midi);
-    const duration = converter.timemap.reduce(
-      (duration, entry) => duration + entry.duration,
-      0,
-    );
-    const ticks = Math.round(
-      duration / (60000 / midi.tempoChanges[0].tempo / midi.timeDivision),
-    );
-    midi.tracks[0].pushEvent({
-      ticks,
-      statusByte: midiMessageTypes.controllerChange,
-      data: new Uint8Array([50, 0]),
-    });
-    midi.flush();
+    
+    // Skip duration adjustment - let MIDI file define its own duration
+    // const duration = converter.timemap.reduce(
+    //   (duration, entry) => duration + entry.duration,
+    //   0,
+    // );
+    // const ticks = Math.round(
+    //   duration / (60000 / midi.tempoChanges[0].tempo / midi.timeDivision),
+    // );
+    // midi.tracks[0].pushEvent({
+    //   ticks,
+    //   statusByte: midiMessageTypes.controllerChange,
+    //   data: new Uint8Array([50, 0]),
+    // });
+    // midi.flush();
+    
     return midi;
   }
 }

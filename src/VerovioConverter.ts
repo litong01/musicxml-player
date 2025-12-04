@@ -64,13 +64,26 @@ export class VerovioConverter
 
     // Unroll score and render to MIDI.
     // FIXME! No longer needed when Verovio is able to unroll a MusicXML score on its own.
-    const unrolled = await unrollMusicXml(
-      musicXml,
-      options.unrollXslUri,
-      options.xsltProcessor,
-    );
-    this._vrv.loadData(unrolled);
-    this._midi = atoab(this._vrv.renderToMIDI());
+    let finalMusicXml = musicXml;
+    
+    if (options.unroll !== false) {
+      const unrolled = await unrollMusicXml(
+        musicXml,
+        options.unrollXslUri,
+        options.xsltProcessor,
+      );
+      
+      // Only use unrolled version if it has notes
+      if ((unrolled.match(/<note[\s>]/g) || []).length > 0) {
+        finalMusicXml = unrolled;
+      } else {
+        console.warn('[VerovioConverter] Unroll produced empty score, using original MusicXML');
+      }
+    }
+    
+    this._vrv.loadData(finalMusicXml);
+    const midiBase64 = this._vrv.renderToMIDI();
+    this._midi = atoab(midiBase64);
   }
 
   get midi(): ArrayBuffer {

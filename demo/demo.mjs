@@ -11,6 +11,7 @@ import {
   MmaConverter,
   FetchConverter,
   parseMusicXml,
+  parseMusicXmlTimemap,
   SaxonJSProcessor,
 } from './build/musicxml-player.mjs';
 import {
@@ -114,6 +115,16 @@ async function createPlayer() {
     const input = document.getElementById(`converter-${k}`);
     try {
       if (typeof v === 'string') {
+        // For MIDI converter, also check IndexedDB cache for uploaded files
+        if (k === 'midi' && !sheet.startsWith('http') && !sheet.startsWith('data/')) {
+          const baseName = sheet.replace(/\.(musicxml|mxl|xml)$/i, '');
+          const cached = await retrieveMidiFile(baseName);
+          if (cached) {
+            console.log(`✓ MIDI converter available (cached): ${baseName}`);
+            input.disabled = false;
+            continue;
+          }
+        }
         await fetish(base.replace(/\.\w+$/, v), { method: 'HEAD' });
       }
       else if (typeof v === 'function') {
@@ -135,12 +146,16 @@ async function createPlayer() {
   // Create new player.
   if (g_state.musicXml) {
     try {
+      console.log(`Creating player with converter: ${converter}, renderer: ${renderer}`);
+      const converterInstance = await createConverter(converter, sheet, groove);
+      console.log('Converter instance created:', converterInstance.constructor.name);
+      
       const player = await Player.create({
         musicXml: g_state.musicXml,
         container: 'sheet-container',
         renderer: await createRenderer(renderer, sheet, options),
         output: createOutput(output),
-        converter: await createConverter(converter, sheet, groove),
+        converter: converterInstance,
         unroll: options.unroll,
         mute: options.mute,
         repeat: repeat === '-1' ? Infinity : Number(repeat),
@@ -152,6 +167,17 @@ async function createPlayer() {
       });
 
       // Update the UI elements.
+      console.log(`✓ Player created successfully`);
+      console.log(`  - MIDI size: ${player.midi.byteLength} bytes`);
+      console.log(`  - Mute: ${options.mute}`);
+      console.log(`  - Output: ${output}`);
+      console.log(`  - Synthesizer:`, player._synthesizer);
+      console.log(`  - Sequencer:`, player._sequencer);
+      if (player._synthesizer) {
+        console.log(`  - Synth voicesAmount:`, player._synthesizer.voicesAmount);
+        console.log(`  - Synth channels:`, player._synthesizer.midiChannels?.length);
+      }
+      
       document.getElementById('version').textContent = JSON.stringify(Object.assign({}, player.version, {
         'ireal-musicxml': `${Version.name} v${Version.version}`
       }));
@@ -166,6 +192,8 @@ async function createPlayer() {
       a2.setAttribute('download', `${filename}.mid`);
       a2.innerText = 'Download MIDI';
       document.getElementById('download-midi').appendChild(a2);
+      
+      console.log(`✓ Player ready - you can now click play`);
 
       // Save the state and player parameters.
       g_state.player = player;
@@ -173,8 +201,10 @@ async function createPlayer() {
       savePlayerOptions();
     }
     catch (error) {
-      console.error(error);
-      document.getElementById('error').textContent = 'Error creating player. Please try another setting.';
+      console.error('❌ Error creating player:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      document.getElementById('error').textContent = `Error creating player: ${error.message}`;
     }
   }
 }
@@ -210,6 +240,42 @@ async function createRenderer(renderer, sheet, options) {
 
 async function createConverter(converter, sheet, groove) {
   const base = sheet.startsWith('http') || sheet.startsWith('data/') ? sheet : `data/${sheet}`;
+  
+  // Extract base filename for cache lookup
+  let baseName = sheet.replace(/\.(musicxml|mxl|xml)$/i, '');
+  if (baseName.startsWith('data/')) {
+    baseName = baseName.replace(/^data\//, '');
+  }
+  // Check if we have a cached MIDI file for uploaded content
+  // This applies to uploaded files (not starting with http or data/)
+  if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
+    console.log(`Checking cache for: ${baseName}, converter type: ${converter}`);
+    const cached = await retrieveMidiFile(baseName);
+    if (cached) {
+      console.log(`✓ Using cached MIDI for: ${sheet}`);
+      console.log(`  MIDI type: ${cached.midi.constructor.name}, size: ${cached.midi.byteLength} bytes`);
+      console.log(`  Timemap entries: ${cached.timemap.length}`);
+      console.log(`  First timemap entry:`, cached.timemap[0]);
+      
+      // Ensure MIDI is an ArrayBuffer
+      const midiBuffer = cached.midi instanceof ArrayBuffer ? cached.midi : cached.midi.buffer;
+      
+      // Debug: Check first few bytes of MIDI (should start with "MThd")
+      const view = new Uint8Array(midiBuffer);
+      const header = String.fromCharCode(view[0], view[1], view[2], view[3]);
+      console.log(`  MIDI header: "${header}" (should be "MThd")`);
+      
+      // For now, just use the cached MIDI without validating events
+      // We'll see the issue in the player logs
+      const fetchConverter = new FetchConverter(midiBuffer, cached.timemap);
+      console.log('✓ Created FetchConverter with cached data');
+      return fetchConverter;
+    } else {
+      console.log(`No cached MIDI found for: ${baseName}, will use converter: ${converter}`);
+    }
+  }
+  
+  console.log(`Creating converter type: ${converter} for sheet: ${sheet}`);
   switch (converter) {
     case 'midi':
       const midi = base.replace(/\.\w+$/, '.mid');
@@ -370,34 +436,269 @@ function handleSheetSelect(e) {
   createPlayer();
 }
 
-async function handleFileBuffer(filename, buffer) {
+async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
   try {
     const parseResult = await parseMusicXml(buffer, new SaxonJSProcessor());
     g_state.musicXml = parseResult.musicXml;
     g_state.params.set('sheet', filename);
+    
+    const baseName = filename.replace(/\.(musicxml|mxl|xml)$/i, '');
+    
+    // Only delete cache and generate MIDI if user didn't provide MIDI file
+    if (!skipCacheDelete) {
+      await deleteMidiFile(baseName);
+      await ensureMidiFile(filename, parseResult.musicXml);
+    }
+    
+    // Set converter to 'vrv' for uploaded files to generate MIDI on the fly
+    g_state.params.set('converter', 'vrv');
+    
     createPlayer();
   }
-  catch {
+  catch (error) {
+    console.error('Error processing uploaded file:', error);
     try {
       const ireal = new TextDecoder().decode(buffer);
       populateSheets(ireal);
     }
-    catch (error) {
+    catch (error2) {
       document.getElementById('error').textContent = 'This file is not recognized as either MusicXML or iReal Pro.';
     }
   }
 }
-async function handleFileUpload(e) {
-  const reader = new FileReader();
-  const file = e.target.files[0];
-  reader.onloadend = async (upload) => {
-    await handleFileBuffer(file.name, upload.target.result);
-  };
-  if (file.size < 1*1024*1024) {
-    reader.readAsArrayBuffer(file);
+
+/**
+ * Ensure MIDI file exists for the given MusicXML file.
+ * If not found in data directory, generate it using Verovio.
+ * @param {string} filename - Original MusicXML filename
+ * @param {string} musicXml - MusicXML content
+ */
+async function ensureMidiFile(filename, musicXml) {
+  const baseName = filename.replace(/\.(musicxml|mxl|xml)$/i, '');
+  const midiPath = `data/${baseName}.mid`;
+  
+  try {
+    // Try to fetch existing MIDI file
+    await fetish(midiPath, { method: 'HEAD' });
+    return;
+  } catch (error) {
+    // MIDI file doesn't exist, generate it
+    try {
+      // Use Verovio to generate MIDI and timemap
+      const converter = new VerovioConverter({
+        tuning: g_state.tuning
+      });
+      
+      await converter.initialize(musicXml, {
+        container: document.createElement('div'),
+        musicXml: musicXml,
+        renderer: {},
+        converter: {},
+        output: null,
+        soundfontUri: '',
+        unrollXslUri: 'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/unroll.sef.json',
+        timemapXslUri: 'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
+        unroll: false,
+        mute: false,
+        repeat: 1,
+        velocity: 1,
+        horizontal: false,
+        followCursor: true,
+        xsltProcessor: new SaxonJSProcessor(),
+      });
+      
+      // Store generated MIDI in IndexedDB for persistence
+      await storeMidiFile(baseName, converter.midi, converter.timemap);
+    } catch (generationError) {
+      console.error('Failed to generate MIDI:', generationError);
+      // Don't throw - player will fall back to runtime conversion
+    }
   }
-  else {
-    document.getElementById('error').textContent = 'This file is too large.';
+}
+
+/**
+ * Store generated MIDI file and timemap in IndexedDB for future use
+ * @param {string} baseName - Base filename without extension
+ * @param {ArrayBuffer} midiData - MIDI file data
+ * @param {Array} timemap - Timemap data
+ */
+async function storeMidiFile(baseName, midiData, timemap) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('MusicXMLPlayerCache', 1);
+    
+    request.onerror = () => reject(request.error);
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('midiFiles')) {
+        db.createObjectStore('midiFiles', { keyPath: 'name' });
+      }
+    };
+    
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const transaction = db.transaction(['midiFiles'], 'readwrite');
+      const store = transaction.objectStore('midiFiles');
+      
+      store.put({
+        name: baseName,
+        midi: midiData,
+        timemap: timemap,
+        timestamp: Date.now()
+      });
+      
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      
+      transaction.onerror = (err) => {
+        console.error(`Failed to store MIDI data:`, err);
+        db.close();
+        reject(transaction.error);
+      };
+    };
+  });
+}
+
+/**
+ * Delete stored MIDI file from IndexedDB
+ * @param {string} baseName - Base filename without extension
+ */
+async function deleteMidiFile(baseName) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('MusicXMLPlayerCache', 1);
+    
+    request.onerror = () => reject(request.error);
+    
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const transaction = db.transaction(['midiFiles'], 'readwrite');
+      const store = transaction.objectStore('midiFiles');
+      
+      store.delete(baseName);
+      
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      
+      transaction.onerror = (err) => {
+        console.error(`Failed to delete MIDI data:`, err);
+        db.close();
+        reject(transaction.error);
+      };
+    };
+  });
+}
+
+/**
+ * Retrieve stored MIDI file from IndexedDB
+ * @param {string} baseName - Base filename without extension
+ * @returns {Promise<{midi: ArrayBuffer, timemap: Array}|null>}
+ */
+async function retrieveMidiFile(baseName) {
+  return new Promise((resolve) => {
+    const request = indexedDB.open('MusicXMLPlayerCache', 1);
+    
+    request.onerror = () => resolve(null);
+    
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('midiFiles')) {
+        db.close();
+        resolve(null);
+        return;
+      }
+      
+      const transaction = db.transaction(['midiFiles'], 'readonly');
+      const store = transaction.objectStore('midiFiles');
+      const getRequest = store.get(baseName);
+      
+      getRequest.onsuccess = () => {
+        const result = getRequest.result;
+        if (result) {
+          console.log(`Retrieved cached MIDI for: ${baseName}`);
+          console.log(`  MIDI size: ${result.midi.byteLength} bytes`);
+          console.log(`  Timemap entries: ${result.timemap.length}`);
+        }
+        db.close();
+        resolve(result || null);
+      };
+      
+      getRequest.onerror = () => {
+        db.close();
+        resolve(null);
+      };
+    };
+  });
+}
+async function handleFileUpload(e) {
+  const files = Array.from(e.target.files);
+  
+  // Check if user uploaded both MusicXML and MIDI
+  const musicXmlFile = files.find(f => f.name.match(/\.(musicxml|mxl|xml)$/i));
+  const midiFile = files.find(f => f.name.match(/\.mid$/i));
+  
+  if (!musicXmlFile) {
+    document.getElementById('error').textContent = 'Please upload a MusicXML file (.musicxml, .mxl, or .xml)';
+    return;
+  }
+  
+  if (musicXmlFile.size > 1*1024*1024) {
+    document.getElementById('error').textContent = 'MusicXML file is too large (max 1MB).';
+    return;
+  }
+  
+  // If MIDI file provided, store it in cache before processing MusicXML
+  if (midiFile) {
+    if (midiFile.size > 1*1024*1024) {
+      document.getElementById('error').textContent = 'MIDI file is too large (max 1MB).';
+      return;
+    }
+    
+    const baseName = musicXmlFile.name.replace(/\.(musicxml|mxl|xml)$/i, '');
+    
+    // Read MIDI file and store in cache
+    const midiReader = new FileReader();
+    await new Promise((resolve) => {
+      midiReader.onloadend = async (upload) => {
+        const midiBuffer = upload.target.result;
+        
+        // Parse MusicXML to get timemap
+        const xmlReader = new FileReader();
+        xmlReader.onloadend = async (xmlUpload) => {
+          try {
+            const parseResult = await parseMusicXml(xmlUpload.target.result, new SaxonJSProcessor());
+            const timemap = await parseMusicXmlTimemap(
+              parseResult.musicXml,
+              'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
+              new SaxonJSProcessor()
+            );
+            
+            // Store user-provided MIDI in cache
+            await storeMidiFile(baseName, midiBuffer, timemap);
+            
+            // Now process the MusicXML file (skip cache deletion since we just stored user MIDI)
+            await handleFileBuffer(musicXmlFile.name, xmlUpload.target.result, true);
+            resolve();
+          } catch (error) {
+            console.error('Error processing files:', error);
+            document.getElementById('error').textContent = 'Error processing uploaded files.';
+            resolve();
+          }
+        };
+        xmlReader.readAsArrayBuffer(musicXmlFile);
+      };
+      midiReader.readAsArrayBuffer(midiFile);
+    });
+  } else {
+    // Only MusicXML provided - try to generate MIDI (may not work for percussion)
+    const reader = new FileReader();
+    reader.onloadend = async (upload) => {
+      await handleFileBuffer(musicXmlFile.name, upload.target.result);
+    };
+    reader.readAsArrayBuffer(musicXmlFile);
   }
 }
 
@@ -508,12 +809,124 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   document.getElementById('play').addEventListener('click', async () => {
-    g_state.player?.play();
+    console.log('Play button clicked');
+    if (g_state.player) {
+      try {
+        console.log('Play button clicked');
+        console.log('Player state before play:', {
+          duration: g_state.player.duration,
+          state: g_state.player.state,
+          position: g_state.player.position,
+          muted: g_state.player.muted
+        });
+        
+        // Check AudioContext state
+        if (g_state.player._context) {
+          console.log('AudioContext state:', g_state.player._context.state);
+        }
+        
+        // Check sequencer state
+        if (g_state.player._sequencer) {
+          console.log('Sequencer paused:', g_state.player._sequencer.paused);
+          console.log('Sequencer currentTime:', g_state.player._sequencer.currentTime);
+        }
+        
+        // Check synthesizer
+        if (g_state.player._synthesizer) {
+          console.log('Synth voicesAmount:', g_state.player._synthesizer.voicesAmount);
+          console.log('Synth system:', g_state.player._synthesizer.system);
+        }
+        
+        // Check if sequencer is still loading
+        if (g_state.player._sequencer.isLoading) {
+          console.log('⚠ Sequencer is still loading, waiting...');
+          // Wait for it to finish loading
+          const checkLoading = setInterval(() => {
+            if (!g_state.player._sequencer.isLoading) {
+              clearInterval(checkLoading);
+              console.log('✓ Sequencer finished loading, midiData:', g_state.player._sequencer.midiData);
+              g_state.player.play();
+            }
+          }, 100);
+          return;
+        }
+        
+        g_state.player.play();
+        
+        // Wait a bit and check state
+        setTimeout(() => {
+          console.log('Player state after play:', {
+            state: g_state.player.state,
+            position: g_state.player.position
+          });
+          if (g_state.player._context) {
+            console.log('AudioContext state after play:', g_state.player._context.state);
+          }
+          if (g_state.player._sequencer) {
+            console.log('Sequencer after play:', {
+              paused: g_state.player._sequencer.paused,
+              currentTime: g_state.player._sequencer.currentTime,
+              midiData: g_state.player._sequencer.midiData,
+              songListData: g_state.player._sequencer.songListData
+            });
+          }
+          if (g_state.player._synthesizer) {
+            console.log('Synth after play:', {
+              voicesAmount: g_state.player._synthesizer.voicesAmount,
+              channelsAmount: g_state.player._synthesizer.channelsAmount
+            });
+            
+            // Check channel states
+            for (let i = 0; i < 16; i++) {
+              const channel = g_state.player._synthesizer.midiChannels?.[i];
+              if (channel) {
+                console.log(`Channel ${i}:`, {
+                  preset: channel.preset,
+                  voices: channel.voices?.length || 0
+                });
+              }
+            }
+          }
+          
+          // Check if there are any MIDI events
+          if (g_state.player._sequencer.midiData) {
+            const midiData = g_state.player._sequencer.midiData;
+            console.log('MIDI data info:', {
+              tracks: midiData.tracks?.length,
+              duration: midiData.duration,
+              timeDivision: midiData.timeDivision
+            });
+            
+            // Check each track for events
+            if (midiData.tracks) {
+              midiData.tracks.forEach((track, i) => {
+                console.log(`Track ${i}:`, track);
+                if (Array.isArray(track)) {
+                  console.log(`  - Events: ${track.length}`);
+                  if (track.length > 0) {
+                    console.log(`  - First event:`, track[0]);
+                  }
+                }
+              });
+            }
+          }
+        }, 100);
+        
+        console.log('✓ player.play() called');
+      } catch (error) {
+        console.error('❌ Error calling player.play():', error);
+        console.error('Error stack:', error.stack);
+      }
+    } else {
+      console.error('❌ No player instance available');
+    }
   });
   document.getElementById('pause').addEventListener('click', async () => {
+    console.log('Pause button clicked');
     g_state.player?.pause();
   });
   document.getElementById('rewind').addEventListener('click', async () => {
+    console.log('Rewind button clicked');
     g_state.player?.rewind();
   });
   document.getElementById('upload').addEventListener('change', handleFileUpload);
