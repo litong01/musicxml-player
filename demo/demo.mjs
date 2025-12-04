@@ -469,7 +469,7 @@ async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
 
 /**
  * Ensure MIDI file exists for the given MusicXML file.
- * If not found in data directory, generate it using Verovio.
+ * First tries to load from data directory, then generates using Verovio if not found.
  * @param {string} filename - Original MusicXML filename
  * @param {string} musicXml - MusicXML content
  */
@@ -478,11 +478,22 @@ async function ensureMidiFile(filename, musicXml) {
   const midiPath = `data/${baseName}.mid`;
   
   try {
-    // Try to fetch existing MIDI file
-    await fetish(midiPath, { method: 'HEAD' });
+    // Try to fetch existing MIDI file from data directory
+    const midiResponse = await fetish(midiPath);
+    const midiBuffer = await midiResponse.arrayBuffer();
+    
+    // Generate timemap from MusicXML
+    const timemap = await parseMusicXmlTimemap(
+      musicXml,
+      'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
+      new SaxonJSProcessor()
+    );
+    
+    // Store MIDI from data directory in cache for future use
+    await storeMidiFile(baseName, midiBuffer, timemap);
     return;
   } catch (error) {
-    // MIDI file doesn't exist, generate it
+    // MIDI file doesn't exist in data directory, generate it
     try {
       // Use Verovio to generate MIDI and timemap
       const converter = new VerovioConverter({
