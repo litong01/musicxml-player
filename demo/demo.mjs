@@ -179,9 +179,6 @@ async function createPlayer() {
         console.log(`  - Synth channels:`, player._synthesizer.midiChannels?.length);
       }
       
-      document.getElementById('version').textContent = JSON.stringify(Object.assign({}, player.version, {
-        'ireal-musicxml': `${Version.name} v${Version.version}`
-      }));
       const filename = player.title.toLowerCase().replace(/[/\\?%*:|"'<>\.,;\s]/g, '-') ?? 'untitled';
       const a1 = document.createElement('a');
       a1.setAttribute('href', URL.createObjectURL(new Blob([player.musicXml], { type: 'text/xml' })));
