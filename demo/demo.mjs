@@ -79,7 +79,6 @@ async function createPlayer() {
   document.getElementById('download-midi').textContent = '';
   document.getElementById('error').textContent = '';
   document.getElementById('ireal').value = '';
-  document.getElementById('grooves').value = groove === DEFAULT_GROOVE ? null : groove;
   document.getElementById('velocity').value = velocity;
   document.getElementById('repeat').value = repeat;
 
@@ -104,41 +103,31 @@ async function createPlayer() {
     }
   }
   document.getElementById(`renderer-${renderer}`).checked = true;
-  for (const [k, v] of Object.entries({
-    'vrv': true,
-    'mma': async () => fetish(window.location.href + 'mma/', { method: 'HEAD' }),
-    'midi': '.mid',
-  })) {
-    const input = document.getElementById(`converter-${k}`);
-    try {
-      if (typeof v === 'string') {
-        // For MIDI converter, also check IndexedDB cache for uploaded files
-        if (k === 'midi' && !sheet.startsWith('http') && !sheet.startsWith('data/')) {
-          const baseName = sheet.replace(/\.(musicxml|mxl|xml)$/i, '');
-          const cached = await retrieveMidiFile(baseName);
-          if (cached) {
-            console.log(`✓ MIDI converter available (cached): ${baseName}`);
-            input.disabled = false;
-            continue;
-          }
-        }
-        await fetish(base.replace(/\.\w+$/, v), { method: 'HEAD' });
-      }
-      else if (typeof v === 'function') {
-        await v();
-      }
-      input.disabled = false;
-    }
-    catch {
-      input.disabled = true;
-      if (converter === k) {
-        converter = DEFAULT_CONVERTER;
+  
+  // Auto-detect converter: prefer custom MIDI if available, otherwise use Verovio
+  let detectedConverter = 'vrv'; // Default to Verovio
+  
+  // Check if custom MIDI file exists in data directory
+  try {
+    await fetish(base.replace(/\.\w+$/, '.mid'), { method: 'HEAD' });
+    detectedConverter = 'midi';
+    console.log(`✓ Custom MIDI file found, using MIDI converter`);
+  }
+  catch {
+    // Check IndexedDB cache for uploaded MIDI files
+    if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
+      const baseName = sheet.replace(/\.(musicxml|mxl|xml)$/i, '');
+      const cached = await retrieveMidiFile(baseName);
+      if (cached) {
+        detectedConverter = 'midi';
+        console.log(`✓ MIDI converter available (cached): ${baseName}`);
       }
     }
   }
-  document.getElementById(`converter-${converter}`).checked = true;
-  document.getElementById('grooves').disabled = converter !== 'mma';
-  document.getElementById('tuning').disabled = converter !== 'vrv';
+  
+  // Override converter parameter with auto-detected value
+  converter = detectedConverter;
+  console.log(`Using converter: ${converter}`);
 
   // Create new player.
   if (g_state.musicXml) {
@@ -316,34 +305,6 @@ function populateMidiOutputs(webmidi) {
     if (option.value === current) option.selected = true;
     outputs.add(option);
   });
-}
-
-async function populateGrooves() {
-  const grooves = document.getElementById('grooves');
-  const groovesList = document.getElementById('grooves-list');
-  try {
-    const lines = await (await fetish(window.location.href + 'mma/grooves')).text();
-    ['Default', 'No groove override, just whatever is specified in the score.', 'None', 'No groove, just the chords.'].concat(lines.split('\n')).forEach((line, index, lines) => {
-      if (index % 2 === 1) {
-        const option = document.createElement('option');
-        option.value = lines[index-1].trim();
-        option.text = line.trim();
-        groovesList.appendChild(option);
-      }
-    });
-    grooves.disabled = false;
-  }
-  catch (error) {
-    grooves.disabled = true;
-  }
-}
-
-function handleGrooveSelect(e) {
-  if ([...document.getElementById('grooves-list').options].find(g => g.value === e.target.value)) {
-    g_state.params.set('groove', e.target.value);
-    g_state.params.set('converter', 'mma');
-    createPlayer();
-  }
 }
 
 function handleMidiOutputSelect(e) {
@@ -763,25 +724,6 @@ function handleRepeatChange(e) {
   savePlayerOptions();
 }
 
-async function handleTuningText(filename, tuning) {
-  g_state.tuning = tuning;
-  createPlayer();
-}
-
-async function handleTuningUpload(e) {
-  const reader = new FileReader();
-  const file = e.target.files[0];
-  reader.onloadend = async (upload) => {
-    await handleTuningText(file.name, upload.target.result);
-  };
-  if (file.size < 100*1024) {
-    reader.readAsText(file);
-  }
-  else {
-    document.getElementById('error').textContent = 'Tuning file is too large.';
-  }
-}
-
 function savePlayerOptions() {
   try {
     window.localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify({
@@ -817,14 +759,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.g_state = g_state;
 
   // Build the UI.
-  await populateGrooves();
-
-  document.querySelectorAll('input[name="converter"]').forEach(input => {
-    input.addEventListener('change', handleConverterChange);
-    if (input.value === (g_state.params.get('converter') ?? DEFAULT_CONVERTER)) {
-      input.checked = true;
-    }
-  });
   document.querySelectorAll('input[name="renderer"]').forEach(input => {
     input.addEventListener('change', handleRendererChange);
     if (input.value === (g_state.params.get('renderer') ?? DEFAULT_RENDERER)) {
@@ -955,12 +889,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('upload').addEventListener('change', handleFileUpload);
   document.getElementById('samples').addEventListener('change', handleSampleSelect);
   document.getElementById('sheets').addEventListener('change', handleSheetSelect);
-  document.getElementById('grooves').addEventListener('change', handleGrooveSelect);
   document.getElementById('outputs').addEventListener('change', handleMidiOutputSelect);
   document.getElementById('ireal').addEventListener('change', handleIRealChange);
   document.getElementById('velocity').addEventListener('change', handleVelocityChange);
   document.getElementById('repeat').addEventListener('change', handleRepeatChange);
-  document.getElementById('tuning').addEventListener('change', handleTuningUpload);
   document.querySelectorAll('.option').forEach(element => {
     if (!!g_state.options[element.id.replace('option-', '')]) {
       element.checked = true;
