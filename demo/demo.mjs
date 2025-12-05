@@ -731,10 +731,10 @@ function handleIRealChange(e) {
 
 function handleOptionChange(e) {
   g_state.options = {
-    unroll: !!document.getElementById('option-unroll').checked,
-    horizontal: !!document.getElementById('option-horizontal').checked,
+    unroll: false, // Always unchecked
+    horizontal: false, // Always unchecked
     mute: !!document.getElementById('option-mute').checked,
-    follow: !!document.getElementById('option-follow').checked,
+    follow: true, // Always checked
   };
   if (e.target.id === 'option-mute') {
     if (g_state.player) {
@@ -801,10 +801,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stored = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEY));
     g_state.params = new URLSearchParams([...stored.params]);
     params.entries().forEach(([key, value]) => { g_state.params.set(key, value); });
-    g_state.options = stored.options;
+    // Use hardcoded options for rendering, only restore mute from storage
+    g_state.options = {
+      unroll: false,
+      horizontal: false,
+      follow: true,
+      mute: stored.options?.mute || false,
+    };
   }
   catch {
     g_state.params = params;
+    g_state.options = DEFAULT_OPTIONS;
   }
   g_state.params.set('output', DEFAULT_OUTPUT); // Too complicated to wait for MIDI output
   window.g_state = g_state;
