@@ -88,8 +88,6 @@ async function createPlayer() {
   for (const [k, v] of Object.entries({
     'vrv': true,
     'osmd': true,
-    'mscore': '.mscore.json',
-    'vrvs': '.vrv.json',
   })) {
     const input = document.getElementById(`renderer-${k}`);
     try {
@@ -110,8 +108,6 @@ async function createPlayer() {
     'vrv': true,
     'mma': async () => fetish(window.location.href + 'mma/', { method: 'HEAD' }),
     'midi': '.mid',
-    'mscore': '.mscore.json',
-    'vrvs': '.vrv.json',
   })) {
     const input = document.getElementById(`converter-${k}`);
     try {
