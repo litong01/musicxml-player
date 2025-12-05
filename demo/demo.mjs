@@ -13,6 +13,7 @@ import {
   parseMusicXml,
   parseMusicXmlTimemap,
   SaxonJSProcessor,
+  convertUnpitchedToPitched,
 } from './build/musicxml-player.mjs';
 import {
   Playlist,
@@ -495,14 +496,18 @@ async function ensureMidiFile(filename, musicXml) {
   } catch (error) {
     // MIDI file doesn't exist in data directory, generate it
     try {
+      // Convert unpitched percussion to pitched notes before Verovio processing
+      // This allows Verovio to generate proper MIDI with Note On/Off events
+      const processedMusicXml = convertUnpitchedToPitched(musicXml);
+      
       // Use Verovio to generate MIDI and timemap
       const converter = new VerovioConverter({
         tuning: g_state.tuning
       });
       
-      await converter.initialize(musicXml, {
+      await converter.initialize(processedMusicXml, {
         container: document.createElement('div'),
-        musicXml: musicXml,
+        musicXml: processedMusicXml,
         renderer: {},
         converter: {},
         output: null,

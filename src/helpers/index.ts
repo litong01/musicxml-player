@@ -6,3 +6,4 @@ export * from './unroll-musicxml';
 export * from './arraybuffer-base64';
 export * from './assertions';
 export * from './debounce';
+export * from './convert-unpitched-percussion';
