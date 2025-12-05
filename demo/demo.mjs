@@ -514,7 +514,7 @@ async function ensureMidiFile(filename, musicXml) {
         soundfontUri: '',
         unrollXslUri: 'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/unroll.sef.json',
         timemapXslUri: 'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
-        unroll: false,
+        unroll: true,
         mute: false,
         repeat: 1,
         velocity: 1,
@@ -523,8 +523,15 @@ async function ensureMidiFile(filename, musicXml) {
         xsltProcessor: new SaxonJSProcessor(),
       });
       
-      // Store generated MIDI in IndexedDB for persistence
-      await storeMidiFile(baseName, converter.midi, converter.timemap);
+      // Generate timemap from ORIGINAL MusicXML (not converted) for accurate measure timing
+      const timemap = await parseMusicXmlTimemap(
+        musicXml,
+        'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
+        new SaxonJSProcessor()
+      );
+      
+      // Store generated MIDI with timemap from original MusicXML
+      await storeMidiFile(baseName, converter.midi, timemap);
     } catch (generationError) {
       console.error('Failed to generate MIDI:', generationError);
       // Don't throw - player will fall back to runtime conversion

@@ -148,7 +148,7 @@ export function convertUnpitchedToPitched(musicXml: string): string {
   // Match unpitched elements with optional instrument ID and display info
   const unpitchedRegex = /<note[^>]*>([\s\S]*?)<unpitched>([\s\S]*?)<\/unpitched>([\s\S]*?)<\/note>/g;
   
-  result = result.replace(unpitchedRegex, (noteMatch, beforeUnpitched, unpitchedContent, afterUnpitched) => {
+  result = result.replace(unpitchedRegex, (noteMatch, _beforeUnpitched, unpitchedContent, _afterUnpitched) => {
     // Extract instrument ID if present
     const instrumentMatch = noteMatch.match(/<instrument[^>]*id="([^"]*)"/);
     const instrumentId = instrumentMatch ? instrumentMatch[1] : null;
@@ -172,15 +172,17 @@ export function convertUnpitchedToPitched(musicXml: string): string {
     const step = steps[noteInOctave];
     const alter = alters[noteInOctave];
     
-    // Build pitch element
-    let pitchXml = `<pitch><step>${step}</step>`;
+    // Build pitch element with proper formatting
+    const indent = '        '; // Match the indentation of the original unpitched element
+    let pitchXml = `<pitch>\n${indent}  <step>${step}</step>`;
     if (alter !== 0) {
-      pitchXml += `<alter>${alter}</alter>`;
+      pitchXml += `\n${indent}  <alter>${alter}</alter>`;
     }
-    pitchXml += `<octave>${octave}</octave></pitch>`;
+    pitchXml += `\n${indent}  <octave>${octave}</octave>\n${indent}  </pitch>`;
     
     // Reconstruct note with pitch instead of unpitched
-    return `<note${noteMatch.substring(5, noteMatch.indexOf('>'))}>${beforeUnpitched}${pitchXml}${afterUnpitched}</note>`;
+    // Simply replace the unpitched element with the pitch element
+    return noteMatch.replace(/<unpitched>[\s\S]*?<\/unpitched>/, pitchXml);
   });
   
   return result;
