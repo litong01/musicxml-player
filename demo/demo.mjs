@@ -140,7 +140,7 @@ async function createPlayer() {
         musicXml: g_state.musicXml,
         container: 'sheet-container',
         renderer: await createRenderer(renderer, sheet, options),
-        output: createOutput(output),
+        output: undefined, // Always use local synth
         converter: converterInstance,
         unroll: options.unroll,
         mute: options.mute,
@@ -287,34 +287,6 @@ async function createConverter(converter, sheet, groove) {
   }
 }
 
-function createOutput(output) {
-  if (g_state.webmidi) {
-    return Array.from(g_state.webmidi.outputs.values()).find(o => o.id === output) ?? undefined;
-  }
-  return undefined;
-}
-
-function populateMidiOutputs(webmidi) {
-  const outputs = document.getElementById('outputs');
-  const current = outputs.value;
-  outputs.textContent = '';
-  [{ id: 'local', name: '(local synth)' }].concat(...(webmidi?.outputs?.values() ?? [])).forEach(output => {
-    const option = document.createElement('option');
-    option.value = output.id;
-    option.text = output.name;
-    if (option.value === current) option.selected = true;
-    outputs.add(option);
-  });
-}
-
-function handleMidiOutputSelect(e) {
-  g_state.params.set('output', e.target.value);
-  if (g_state.player) {
-    g_state.player.output = createOutput(e.target.value);
-  }
-  savePlayerOptions();
-}
-
 function handleRendererChange(e) {
   g_state.params.set('renderer', e.target.value);
   createPlayer();
@@ -337,19 +309,6 @@ function handlePlayPauseKey(e) {
   }
 }
 
-function populateSheets(ireal) {
-  const playlist = new Playlist(ireal);
-  const sheets = document.getElementById('sheets');
-  sheets.textContent = '';
-  playlist.songs.forEach(song => {
-    const option = document.createElement('option');
-    option.value = JSON.stringify(song);
-    option.text = song.title;
-    sheets.add(option);
-  });
-  sheets.dispatchEvent(new Event('change'));
-}
-
 async function handleSampleSelect(e) {
   if (!e.target.value) return;
   let sheet = e.target.value;
@@ -358,7 +317,6 @@ async function handleSampleSelect(e) {
     sheet = DEFAULT_SHEET;
     option = document.querySelector(`#samples option[value="${sheet}"]`);
   }
-  document.getElementById('sheets').textContent = '';
   try {
     g_state.params.set('renderer', option.getAttribute('data-renderer'));
     g_state.params.set('converter', option.getAttribute('data-converter'));
@@ -370,10 +328,19 @@ async function handleSampleSelect(e) {
       createPlayer();
     }
     else {
+      // For iReal Pro files, just load the first song
       const ireal = await (await fetish(sheet)).text();
-      g_state.params.set('sheet', sheet);
-      g_state.params.set('groove', DEFAULT_GROOVE);
-      populateSheets(ireal);
+      const playlist = new Playlist(ireal);
+      if (playlist.songs.length > 0) {
+        const song = playlist.songs[0];
+        g_state.musicXml = Converter.convert(song, {
+          notation: 'rhythmic',
+          date: false,
+        });
+        g_state.params.set('sheet', sheet);
+        g_state.params.set('groove', DEFAULT_GROOVE);
+        createPlayer();
+      }
     }
   }
   catch (error) {
@@ -381,14 +348,20 @@ async function handleSampleSelect(e) {
   }
 }
 
-function handleSheetSelect(e) {
-  const song = JSON.parse(e.target.value);
-  g_state.musicXml = Converter.convert(song, {
-    notation: 'rhythmic',
-    date: false,
-  });
-  g_state.params.set('groove', DEFAULT_GROOVE);
-  createPlayer();
+function handleIRealChange(e) {
+  const ireal = e.target.value;
+  if (!ireal) return;
+  const playlist = new Playlist(ireal);
+  if (playlist.songs.length > 0) {
+    const song = playlist.songs[0];
+    g_state.musicXml = Converter.convert(song, {
+      notation: 'rhythmic',
+      date: false,
+    });
+    g_state.params.set('sheet', 'ireal');
+    g_state.params.set('groove', DEFAULT_GROOVE);
+    createPlayer();
+  }
 }
 
 async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
@@ -679,17 +652,6 @@ async function handleFileUpload(e) {
   }
 }
 
-function handleIRealChange(e) {
-  if (!e.target.value) return;
-  try {
-    populateSheets(e.target.value);
-  }
-  catch {
-    document.getElementById('error').textContent = 'This URI is not recognized as iReal Pro.';
-    document.getElementById('ireal').value = '';
-  }
-}
-
 function handleOptionChange(e) {
   g_state.options = {
     unroll: false, // Always unchecked
@@ -888,8 +850,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('upload').addEventListener('change', handleFileUpload);
   document.getElementById('samples').addEventListener('change', handleSampleSelect);
-  document.getElementById('sheets').addEventListener('change', handleSheetSelect);
-  document.getElementById('outputs').addEventListener('change', handleMidiOutputSelect);
   document.getElementById('ireal').addEventListener('change', handleIRealChange);
   document.getElementById('velocity').addEventListener('change', handleVelocityChange);
   document.getElementById('repeat').addEventListener('change', handleRepeatChange);
@@ -900,18 +860,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     element.addEventListener('change', handleOptionChange);
   });
   window.addEventListener('keydown', handlePlayPauseKey);
-
-  // Initialize Web MIDI.
-  if (navigator.requestMIDIAccess) navigator.requestMIDIAccess({
-    sysex: true
-  }).then(webmidi => {
-    populateMidiOutputs(webmidi);
-    webmidi.onstatechange = () => populateMidiOutputs(webmidi);
-    g_state.webmidi = webmidi;
-  }, error => {
-    console.error(error);
-    populateMidiOutputs();
-  });
 
   // Start the app.
   await handleSampleSelect({ target: { value: g_state.params.get('sheet') ?? DEFAULT_SHEET }});
