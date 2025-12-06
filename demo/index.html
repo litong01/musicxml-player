@@ -5,35 +5,146 @@
     <title>MusicXML Player</title>
     <style>
       body {
-        background-color: wheat;
+        background-color: white;
         overflow-x: none;
+        margin: 0;
+        padding: 0;
       }
       .hide {
         display: none;
       }
-      #player {
+      #header {
         position: fixed;
-        bottom: 0;
-        width: 100%;
+        top: 0;
+        left: 0;
+        right: 0;
+        background-color: white;
+        padding: 10px;
         display: flex;
-        justify-content: center;
+        justify-content: space-between;
         align-items: center;
-        z-index: 1000;
-        pointer-events: none;
+        z-index: 1001;
+        border-bottom: 2px solid #b8860b;
+      }
+      #header h1 {
+        margin: 0;
+        font-size: 1.5em;
+      }
+      #settings-btn {
+        font-size: 1.5em;
+        padding: 5px 15px;
+        cursor: pointer;
+        background-color: #b8860b;
+        color: white;
+        border: none;
+        border-radius: 5px;
+      }
+      #settings-btn:hover {
+        background-color: #8b6914;
+      }
+      #settings-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 2000;
+        overflow-y: auto;
+      }
+      #settings-modal.show {
+        display: block;
+      }
+      #settings-content {
+        background-color: white;
+        margin: 50px auto;
+        padding: 20px;
+        max-width: 600px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+      }
+      #settings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      #settings-header h2 {
+        margin: 0;
+      }
+      #close-settings {
+        font-size: 1.5em;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 5px 10px;
+      }
+      #close-settings:hover {
+        color: #b8860b;
+      }
+      .settings-section {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #d4a574;
+      }
+      .settings-section:last-child {
+        border-bottom: none;
+      }
+      .settings-section label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+      .settings-section input[type="text"],
+      .settings-section select,
+      .settings-section input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 5px;
+        box-sizing: border-box;
+      }
+      .settings-section input[type="number"] {
+        width: 80px;
+        padding: 5px;
+      }
+      .settings-section small {
+        color: #666;
+        display: block;
+        margin-top: 5px;
+      }
+      #player {
+        display: flex;
+        gap: 5px;
+        align-items: center;
       }
       .player {
-        font-size: larger;
-        margin: 5px;
-        height: 35px;
-        width: 35px;
-        pointer-events: auto;
+        font-size: 1.2em;
+        padding: 8px 12px;
+        height: 40px;
+        width: 40px;
+        cursor: pointer;
+        background-color: #b8860b;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .player:hover {
+        background-color: #8b6914;
       }
       #error {
         background-color: brown;
         color: lightgray;
+        padding: 5px;
+        margin-top: 5px;
+        border-radius: 3px;
       }
       #sheet-container {
-        height: 50vh;
+        margin-top: 65px;
+        height: calc(100vh - 70px);
       }
       #audio-offset {
         width: 5em;
@@ -43,83 +154,117 @@
     <script type="module" src="demo.mjs"></script>
   </head>
   <body>
-    <h1>MusicXML Player</h1>
-    <div>
-      <label for="samples">Choose a sample from the list here</label>&nbsp;
-      <select id="samples">
-        <option value="">-- Choose --</option>
-        <option data-renderer="vrv" data-converter="midi" value="data/salma-ya-salama.mxl">Salma ya Salama (Compressed MusicXML)</option>
-        <option data-renderer="vrv" data-converter="midi" value="data/asa-branca.musicxml">Asa Branca (Uncompressed MusicXML)</option>
-        <option data-renderer="mscore" data-converter="mscore"  value="data/tutorial-apres-un-reve.musicxml">Après un rêve (MuseScore Static Rendering)</option>
-        <option data-renderer="vrv" data-converter="vrv" value="data/maqam-rast.musicxml">Maqam Rast (Microtonal MusicXML)</option>
-        <option data-renderer="vrvs" data-converter="vrvs" value="data/blackwood-ex-29.musicxml">Easley Blackwood's Ex. 29 (Microtonal MusicXML / Verovio Static Rendering)</option>
-        <option data-renderer="mscore" data-converter="mscore" value="data/shumays.musicxml">Sami Abu Shumays Lesson Intro (Microtonal MusicXML / MuseScore Static Rendering)</option>
-        <option data-renderer="vrv" data-converter="vrv" value="data/sagittal.musicxml">A Musical Example in Sagittal Notation (Microtonal MusicXML with SMuFL glyphs)</option>
-        <option data-renderer="vrv" data-converter="midi" value="data/baiao-miranda.musicxml">Baião Groove (Rhythm MusicXML)</option>
-        <option data-renderer="vrv" data-converter="mma" value="data/jazz1460.txt">Playlist: Jazz 1460 (iReal Pro)</option>
-      </select>
-    </div>
-
-    <div>
-      <label for="upload">Or upload MusicXML (+ optional MIDI file)</label>&nbsp;
-      <input type="file" id="upload" name="upload" multiple accept=".musicxml,.mxl,.xml,.mid"/>
-      <span id="error"></span>
-      <br><small style="color: #666;">Tip: Upload both .musicxml and .mid for best results with percussion notes</small>
-    </div>
-
-    <div>
-      <label for="ireal">Or paste an iReal Pro song URI directly</label>&nbsp;
-      <input type="text" size="50" id="ireal" name="ireal" placeholder="irealb://... or irealbook://..."/>
-    </div>
-
-    <div>
-      <span id="download-musicxml"></span>
-      <span id="download-midi"></span>
-    </div>
-
-    <div>
-      Renderer
-      <input type="radio" id="renderer-vrv" name="renderer" value="vrv"/>
-      <label for="renderer-vrv">Verovio</label>
-      <input type="radio" id="renderer-osmd" name="renderer" value="osmd"/>
-      <label for="renderer-osmd">OpenSheetMusicDisplay</label>
-    </div>
-
-
-
-    <div>
-      <label for="velocity">Velocity</label>
-      <input type="number" id="velocity" name="velocity" value="1" min="0.25" max="2" step="0.25"/>
-      <label for="repeat">Repeat</label>
-      <select id="repeat" name="repeat">
-        <option value="0">No</option>
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-        <option value="-1">∞</option>
-      </select> times
-    </div>
-
-    <div>
-      <input type="checkbox" class="option" id="option-mute" value="mute"/>
-      <label for="option-mute">Mute</label>
-    </div>
-
-    <!-- <div>
-      <label for="audio-file">Audio track (.mp3, .ogg)</label>
-      <input type="file" id="audio-file" name="upload" accept="audio/mpeg, audio/ogg"/>
-      <label for="audio-offset">Audio offset</label>
-      <input type="number" id="audio-offset" name="audio-offset" value="0" step="50" disabled/> ms.
-      <div>
-        <audio id="audio-track"></audio>
+    <div id="header">
+      <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" title="MusicXML Player">
+        <!-- Musical note -->
+        <path d="M70 20 L70 65 Q70 75 60 75 Q50 75 50 65 Q50 55 60 55 Q65 55 70 58 L70 30 L85 25 L85 53 Q85 63 75 63 Q65 63 65 53 Q65 43 75 43 Q80 43 85 46 L85 20 Z" 
+              fill="#b8860b" stroke="#8b6914" stroke-width="2"/>
+        <!-- Staff lines -->
+        <line x1="15" y1="35" x2="45" y2="35" stroke="#b8860b" stroke-width="1.5"/>
+        <line x1="15" y1="42" x2="45" y2="42" stroke="#b8860b" stroke-width="1.5"/>
+        <line x1="15" y1="49" x2="45" y2="49" stroke="#b8860b" stroke-width="1.5"/>
+        <line x1="15" y1="56" x2="45" y2="56" stroke="#b8860b" stroke-width="1.5"/>
+        <line x1="15" y1="63" x2="45" y2="63" stroke="#b8860b" stroke-width="1.5"/>
+        <!-- Treble clef -->
+        <path d="M25 45 Q25 38 30 35 Q32 38 30 42 Q28 45 25 45 M30 42 L30 60 Q28 65 25 65 Q22 65 22 62 Q22 59 25 59 Q27 59 28 60" 
+              fill="none" stroke="#b8860b" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div id="player">
+        <button class="player" id="rewind">⏮</button>
+        <button class="player" id="pause">⏸</button>
+        <button class="player" id="play">▶</button>
       </div>
-    </div> -->
+      <button id="settings-btn">⚙️ Settings</button>
+    </div>
 
-    <div id="player">
-      <button class="player" id="rewind">⏮</button>
-      <button class="player" id="pause">⏸</button>
-      <button class="player" id="play">▶</button>
+    <div id="settings-modal">
+      <div id="settings-content">
+        <div id="settings-header">
+          <h2>Settings</h2>
+          <button id="close-settings">✕</button>
+        </div>
+
+        <div class="settings-section" style="background-color: #f5deb3; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; margin-bottom: 15px; color: #8b6914;">Select Music Source</h3>
+          
+          <div style="margin-bottom: 15px;">
+            <label for="samples" style="font-weight: bold;">1. Choose a sample from the list</label>
+            <select id="samples">
+              <option value="">-- Choose --</option>
+              <option data-renderer="vrv" data-converter="midi" value="data/salma-ya-salama.mxl">Salma ya Salama (Compressed MusicXML)</option>
+              <option data-renderer="vrv" data-converter="midi" value="data/asa-branca.musicxml">Asa Branca (Uncompressed MusicXML)</option>
+              <option data-renderer="mscore" data-converter="mscore"  value="data/tutorial-apres-un-reve.musicxml">Après un rêve (MuseScore Static Rendering)</option>
+              <option data-renderer="vrv" data-converter="vrv" value="data/maqam-rast.musicxml">Maqam Rast (Microtonal MusicXML)</option>
+              <option data-renderer="vrvs" data-converter="vrvs" value="data/blackwood-ex-29.musicxml">Easley Blackwood's Ex. 29 (Microtonal MusicXML / Verovio Static Rendering)</option>
+              <option data-renderer="mscore" data-converter="mscore" value="data/shumays.musicxml">Sami Abu Shumays Lesson Intro (Microtonal MusicXML / MuseScore Static Rendering)</option>
+              <option data-renderer="vrv" data-converter="vrv" value="data/sagittal.musicxml">A Musical Example in Sagittal Notation (Microtonal MusicXML with SMuFL glyphs)</option>
+              <option data-renderer="vrv" data-converter="midi" value="data/baiao-miranda.musicxml">Baião Groove (Rhythm MusicXML)</option>
+              <option data-renderer="vrv" data-converter="mma" value="data/jazz1460.txt">Playlist: Jazz 1460 (iReal Pro)</option>
+            </select>
+          </div>
+
+          <div style="margin-bottom: 15px; padding-top: 10px; border-top: 1px dashed #d4a574;">
+            <label for="upload" style="font-weight: bold;">2. Upload your MusicXML file</label>
+            <input type="file" id="upload" name="upload" multiple accept=".musicxml,.mxl,.xml,.mid"/>
+            <small>Tip: Upload both .musicxml and .mid for best results with percussion notes</small>
+          </div>
+
+          <div style="padding-top: 10px; border-top: 1px dashed #d4a574;">
+            <label for="ireal" style="font-weight: bold;">3. Paste a MusicXML file URL</label>
+            <input type="text" id="ireal" name="ireal" placeholder="https://example.com/song.musicxml or https://example.com/song.mxl"/>
+            <small>Supports Google Drive sharing links</small>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <label style="margin: 0; font-weight: bold;">Renderer:</label>
+            <div style="display: flex; gap: 15px;">
+              <label for="renderer-vrv" style="display: flex; align-items: center; gap: 5px; font-weight: normal; cursor: pointer;">
+                <input type="radio" id="renderer-vrv" name="renderer" value="vrv"/>
+                Verovio
+              </label>
+              <label for="renderer-osmd" style="display: flex; align-items: center; gap: 5px; font-weight: normal; cursor: pointer;">
+                <input type="radio" id="renderer-osmd" name="renderer" value="osmd"/>
+                OpenSheetMusicDisplay
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label for="velocity" style="margin: 0; font-weight: bold;">Velocity:</label>
+              <input type="number" id="velocity" name="velocity" value="1" min="0.25" max="2" step="0.25" style="width: 70px;"/>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label for="repeat" style="margin: 0; font-weight: bold;">Repeat:</label>
+              <select id="repeat" name="repeat" style="width: auto; padding: 5px;">
+                <option value="0">No</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="-1">∞</option>
+              </select>
+              <span>times</span>
+            </div>
+
+            <label for="option-mute" style="display: flex; align-items: center; gap: 5px; margin: 0; cursor: pointer;">
+              <span style="font-weight: bold;">Mute</span>
+              <input type="checkbox" class="option" id="option-mute" value="mute"/>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <span id="error"></span>
+          <span id="download-musicxml"></span>
+          <span id="download-midi"></span>
+        </div>
+      </div>
     </div>
 
     <div id="sheet-container"></div>

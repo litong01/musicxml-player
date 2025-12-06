@@ -78,7 +78,10 @@ async function createPlayer() {
   document.getElementById('download-musicxml').textContent = '';
   document.getElementById('download-midi').textContent = '';
   document.getElementById('error').textContent = '';
-  document.getElementById('ireal').value = '';
+  // Only clear ireal if the sheet is not a URL
+  if (!sheet.startsWith('http')) {
+    document.getElementById('ireal').value = '';
+  }
   document.getElementById('velocity').value = velocity;
   document.getElementById('repeat').value = repeat;
 
@@ -348,19 +351,51 @@ async function handleSampleSelect(e) {
   }
 }
 
-function handleIRealChange(e) {
-  const ireal = e.target.value;
-  if (!ireal) return;
-  const playlist = new Playlist(ireal);
-  if (playlist.songs.length > 0) {
-    const song = playlist.songs[0];
-    g_state.musicXml = Converter.convert(song, {
-      notation: 'rhythmic',
-      date: false,
-    });
-    g_state.params.set('sheet', 'ireal');
-    g_state.params.set('groove', DEFAULT_GROOVE);
-    createPlayer();
+async function handleIRealChange(e) {
+  let url = e.target.value.trim();
+  if (!url) return;
+  
+  try {
+    // Convert Google Drive sharing URL to direct download URL
+    if (url.includes('drive.google.com')) {
+      const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (fileIdMatch) {
+        url = `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+        console.log('Converted Google Drive URL to:', url);
+      }
+    }
+    
+    // Try to fetch the MusicXML file directly
+    let buffer;
+    try {
+      buffer = await (await fetish(url)).arrayBuffer();
+    } catch (directError) {
+      // If direct fetch fails (likely CORS), try with a CORS proxy
+      console.log('Direct fetch failed, trying CORS proxy...');
+      const corsProxy = 'https://corsproxy.io/?';
+      buffer = await (await fetish(corsProxy + encodeURIComponent(url))).arrayBuffer();
+    }
+    
+    // Extract filename for display and caching
+    const filename = e.target.value.split('/').pop().split('?')[0] || 'remote-file.musicxml';
+    
+    // Store the original URL before calling handleFileBuffer
+    const originalUrl = e.target.value;
+    
+    // Use the same handling as file uploads (includes unpitched conversion and proper unrolling)
+    await handleFileBuffer(filename, buffer);
+    
+    // Override the sheet parameter with the original URL so it persists
+    g_state.params.set('sheet', originalUrl);
+    
+    // Keep the URL visible in the input field
+    document.getElementById('ireal').value = originalUrl;
+    
+    // Clear any error messages
+    document.getElementById('error').textContent = '';
+  } catch (error) {
+    console.error('Error loading MusicXML from URL:', error);
+    document.getElementById('error').textContent = `Failed to load MusicXML from URL. Make sure the URL is accessible and the file is a valid MusicXML file. (${error.message})`;
   }
 }
 
@@ -860,6 +895,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     element.addEventListener('change', handleOptionChange);
   });
   window.addEventListener('keydown', handlePlayPauseKey);
+
+  // Settings modal controls
+  const settingsModal = document.getElementById('settings-modal');
+  const settingsBtn = document.getElementById('settings-btn');
+  const closeSettings = document.getElementById('close-settings');
+
+  settingsBtn.addEventListener('click', () => {
+    settingsModal.classList.add('show');
+  });
+
+  closeSettings.addEventListener('click', () => {
+    settingsModal.classList.remove('show');
+  });
+
+  // Close modal when clicking outside the content
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+      settingsModal.classList.remove('show');
+    }
+  });
+
+  // Close modal when a file is selected or URL is loaded
+  document.getElementById('samples').addEventListener('change', () => {
+    setTimeout(() => settingsModal.classList.remove('show'), 300);
+  });
+
+  document.getElementById('upload').addEventListener('change', () => {
+    setTimeout(() => settingsModal.classList.remove('show'), 300);
+  });
+
+  document.getElementById('ireal').addEventListener('change', () => {
+    setTimeout(() => settingsModal.classList.remove('show'), 300);
+  });
 
   // Start the app.
   await handleSampleSelect({ target: { value: g_state.params.get('sheet') ?? DEFAULT_SHEET }});
