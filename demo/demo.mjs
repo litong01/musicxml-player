@@ -984,6 +984,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => settingsModal.classList.remove('show'), 300);
   });
 
+  // Register service worker for PWA support
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then((registration) => {
+        console.log('Service Worker registered successfully:', registration.scope);
+      })
+      .catch((error) => {
+        console.log('Service Worker registration failed:', error);
+      });
+  }
+
   // Start the app.
   await handleSampleSelect({ target: { value: g_state.params.get('sheet') ?? DEFAULT_SHEET }});
 });

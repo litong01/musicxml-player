@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SVG to PNG Converter</title>
+</head>
+<body>
+    <h2>SVG to PNG Converter</h2>
+    <p>This page will convert the SVG icons to PNG format for better iOS compatibility.</p>
+    
+    <canvas id="canvas192" width="192" height="192" style="border: 1px solid #ccc; margin: 10px;"></canvas>
+    <button onclick="download('192')">Download 192x192 PNG</button>
+    
+    <br><br>
+    
+    <canvas id="canvas512" width="512" height="512" style="border: 1px solid #ccc; margin: 10px;"></canvas>
+    <button onclick="download('512')">Download 512x512 PNG</button>
+
+    <script>
+        // Load and convert icon-192.svg
+        fetch('icon-192.svg')
+            .then(response => response.text())
+            .then(svgText => {
+                const img = new Image();
+                const blob = new Blob([svgText], {type: 'image/svg+xml'});
+                const url = URL.createObjectURL(blob);
+                img.onload = () => {
+                    const canvas = document.getElementById('canvas192');
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            });
+
+        // Load and convert icon-512.svg
+        fetch('icon-512.svg')
+            .then(response => response.text())
+            .then(svgText => {
+                const img = new Image();
+                const blob = new Blob([svgText], {type: 'image/svg+xml'});
+                const url = URL.createObjectURL(blob);
+                img.onload = () => {
+                    const canvas = document.getElementById('canvas512');
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            });
+
+        function download(size) {
+            const canvas = document.getElementById('canvas' + size);
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'icon-' + size + '.png';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#b8860b"/>
+  <g transform="translate(256, 256) scale(9)">
+    <!-- Musical note -->
+    <path d="M20 5 L20 18 Q20 22 16 22 Q12 22 12 18 Q12 14 16 14 Q18 14 20 16 L20 8 L28 6 L28 15 Q28 19 24 19 Q20 19 20 15 Q20 11 24 11 Q26 11 28 13 L28 5 Z" 
+          fill="white" stroke="white" stroke-width="0.5"/>
+    <!-- Staff lines -->
+    <line x1="-10" y1="8" x2="8" y2="8" stroke="white" stroke-width="0.5"/>
+    <line x1="-10" y1="10" x2="8" y2="10" stroke="white" stroke-width="0.5"/>
+    <line x1="-10" y1="12" x2="8" y2="12" stroke="white" stroke-width="0.5"/>
+    <line x1="-10" y1="14" x2="8" y2="14" stroke="white" stroke-width="0.5"/>
+    <line x1="-10" y1="16" x2="8" y2="16" stroke="white" stroke-width="0.5"/>
+    <!-- Treble clef -->
+    <path d="M0 12 Q0 9 2 8 Q3 9 2 11 Q1 12 0 12 M2 11 L2 18 Q1 20 -1 20 Q-2 20 -2 19 Q-2 18 -1 18 Q0 18 1 18" 
+          fill="none" stroke="white" stroke-width="0.8" stroke-linecap="round"/>
+  </g>
+  <text x="256" y="450" font-family="Arial, sans-serif" font-size="48" fill="white" text-anchor="middle" font-weight="bold">MusicXML Player</text>
+</svg>
