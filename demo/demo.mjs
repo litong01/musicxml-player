@@ -324,11 +324,14 @@ async function handleSampleSelect(e) {
     g_state.params.set('renderer', option.getAttribute('data-renderer'));
     g_state.params.set('converter', option.getAttribute('data-converter'));
     if (sheet.endsWith('.musicxml') || sheet.endsWith('.mxl')) {
-      const musicXml = await (await fetish(sheet)).arrayBuffer();
-      g_state.musicXml = musicXml;
-      g_state.params.set('sheet', sheet);
-      g_state.params.set('groove', DEFAULT_GROOVE);
-      createPlayer();
+      // Fetch the MusicXML file
+      const buffer = await (await fetish(sheet)).arrayBuffer();
+      
+      // Extract filename from path
+      const filename = sheet.split('/').pop();
+      
+      // Use handleFileBuffer which will parse, convert unpitched percussion, and ensure MIDI exists
+      await handleFileBuffer(filename, buffer);
     }
     else {
       // For iReal Pro files, just load the first song
@@ -733,6 +736,55 @@ function savePlayerOptions() {
   }
 }
 
+async function populateSamplesList() {
+  const samplesSelect = document.getElementById('samples');
+  samplesSelect.innerHTML = '<option value="">-- Choose --</option>';
+  
+  try {
+    // List of all MusicXML files in the data directory
+    const musicFiles = [
+      'asa-branca.musicxml',
+      'baiao-miranda.musicxml',
+      'blackwood-ex-29.musicxml',
+      'blue-bag-folly.musicxml',
+      'chopin-trois-valses.mxl',
+      'maqam-rast.musicxml',
+      'neville-san.musicxml',
+      'page16.mxl',
+      'page17.mxl',
+      'page22new.musicxml',
+      'sagittal.musicxml',
+      'salma-ya-salama.mxl',
+      'shumays.musicxml',
+      'tutorial-apres-un-reve.musicxml',
+    ];
+
+    // Check which files exist and add them to the dropdown
+    for (const file of musicFiles) {
+      try {
+        await fetish(`data/${file}`, { method: 'HEAD' });
+        // Create a display name from the filename
+        const displayName = file
+          .replace(/\.(musicxml|mxl)$/i, '')
+          .replace(/[-_]/g, ' ')
+          .replace(/\b\w/g, l => l.toUpperCase());
+        
+        const option = document.createElement('option');
+        option.value = `data/${file}`;
+        option.text = displayName;
+        option.setAttribute('data-renderer', 'vrv');
+        option.setAttribute('data-converter', 'midi');
+        samplesSelect.add(option);
+      } catch (error) {
+        // File doesn't exist, skip it
+        console.log(`File not found: data/${file}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error populating samples list:', error);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Load the parameters from local storage and/or the URL.
   const params = new URLSearchParams(document.location.search);
@@ -754,6 +806,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   g_state.params.set('output', DEFAULT_OUTPUT); // Too complicated to wait for MIDI output
   window.g_state = g_state;
+
+  // Populate the samples list dynamically
+  await populateSamplesList();
 
   // Build the UI.
   document.querySelectorAll('input[name="renderer"]').forEach(input => {
