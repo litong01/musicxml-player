@@ -559,6 +559,13 @@ async function deleteMidiFile(baseName) {
     
     request.onerror = () => reject(request.error);
     
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('midiFiles')) {
+        db.createObjectStore('midiFiles', { keyPath: 'name' });
+      }
+    };
+    
     request.onsuccess = (event) => {
       const db = event.target.result;
       const transaction = db.transaction(['midiFiles'], 'readwrite');
@@ -590,6 +597,13 @@ async function retrieveMidiFile(baseName) {
     const request = indexedDB.open('MusicXMLPlayerCache', 1);
     
     request.onerror = () => resolve(null);
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('midiFiles')) {
+        db.createObjectStore('midiFiles', { keyPath: 'name' });
+      }
+    };
     
     request.onsuccess = (event) => {
       const db = event.target.result;
