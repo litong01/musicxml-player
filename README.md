@@ -2,22 +2,20 @@ MusicXML Player
 ===============
 
 [![npm](https://img.shields.io/npm/v/%40music-i18n%2Fmusicxml-player)](https://www.npmjs.com/package/@music-i18n/musicxml-player)
-[![build](https://github.com/infojunkie/musicxml-player/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/infojunkie/musicxml-player/actions/workflows/test.yml)
+[![build](https://github.com/litong01/musicxml-player/actions/workflows/multi-arch-image.yaml/badge.svg?branch=main)](https://github.com/litong01/musicxml-player/actions/workflows/multi-arch-image.yaml)
 
 A TypeScript component that loads and plays MusicXML files in the browser using Web Audio and Web MIDI.
 
-![Screenshot](screenshot.png?raw=true)
+![Screenshot](main.png?raw=true)
+![Screenshot](setting.png?raw=true)
 
 # Getting started
 ```
-npm install
-npm run build
-npm test
-npm run demo:develop
+./build.sh
+docker run -d --name musicxml-player -p 8082:8082 tli551/mxp:0.0.1
 ```
-Then open http://127.0.0.1:8080/
+Then open http://127.0.0.1:8082/
 
-NOTE! To use the MMA (Musical MIDI Accompaniment) feature, you need to [install and run `musicxml-midi`](https://github.com/infojunkie/musicxml-midi) separately. Typically, running `PORT=3000 npm run start` from the `musicxml-midi` folder in a separate console should be enough.
 
 # Theory of operation
 This component synchronizes rendering and playback of MusicXML scores. Rendering is done using existing Web-based music engraving libraries such as [Verovio](https://github.com/rism-digital/verovio) or [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay). Rendering can also use pre-rendered assets (SVG, metadata) obtained from MuseScore or Verovio. Playback uses standard MIDI files that are expected to correspond to the given MusicXML, and sends the MIDI events to either a Web MIDI output, or to a Web Audio synthesizer, using the module [`spessasynth_lib`](https://github.com/spessasus/spessasynth_lib).
@@ -29,42 +27,11 @@ There are 3 bundled implementations of `IMidiConverter` in this module:
 - [Verovio](https://github.com/rism-digital/verovio), that generates a faithful rendition of the MusicXML score but lacks accompaniment generation.
 - It is also possible to hand-craft the MIDI and timemap files, and instruct the player to read those explicitly.
 
-# API usage
-At the moment, the only documentation available for the usage of the player is located in the [demo app](demo/demo.mjs).
+# Try the application
 
-# Tests
-This project uses Vitest for testing:
-- Unit tests run in Node.
-- Integration tests (that might rely on browser-like APIs) run with a jsdom environment. 
-Use the commands below to run all tests, a single file, or a single test in watch or non-watch mode.
+[Musicxml-player](https://musicxml-player.onrender.com)
 
-- All tests
-```bash
-npm test
-```
-
-- Single file
-```bash
-npm test -- src/helpers/fetish.spec.ts
-```
-
-- Single test by name (pattern)
-```bash
-npm test -- -t "should throw if not ok"
-```
-
-- Watch mode (all tests)
-```bash
-npm test -- --watch
-```
-
-- Watch a single file
-```bash
-npm test -- src/helpers/fetish.spec.ts --watch
-```
-
-- Watch a single test in a file
-```bash
-npm test -- src/helpers/fetish.spec.ts -t "should throw if not ok" --watch
-```
-
+# Main capabilities:
+- Play xml files from dropdown box
+- Upload music xml file with match midi file or just xml file (midi gets generated automatically)
+- Use url which points to music xml on the web
