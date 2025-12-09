@@ -21,7 +21,7 @@ import {
   Version
 } from 'https://cdn.jsdelivr.net/npm/@music-i18n/ireal-musicxml@latest/+esm';
 
-const DEFAULT_RENDERER = 'vrv';
+const DEFAULT_RENDERER = 'osmd';
 const DEFAULT_OUTPUT = 'local';
 const DEFAULT_SHEET = 'data/asa-branca.musicxml';
 const DEFAULT_GROOVE = 'Default';
@@ -786,7 +786,7 @@ async function populateSamplesList() {
         const option = document.createElement('option');
         option.value = `data/${file}`;
         option.text = displayName;
-        option.setAttribute('data-renderer', 'vrv');
+        option.setAttribute('data-renderer', 'osmd');
         option.setAttribute('data-converter', 'midi');
         samplesSelect.add(option);
       } catch (error) {
@@ -805,7 +805,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const stored = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEY));
     g_state.params = new URLSearchParams([...stored.params]);
-    params.entries().forEach(([key, value]) => { g_state.params.set(key, value); });
     // Use hardcoded options for rendering, only restore mute from storage
     g_state.options = {
       unroll: false,
@@ -815,20 +814,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
   }
   catch {
-    g_state.params = params;
+    g_state.params = new URLSearchParams();
     g_state.options = DEFAULT_OPTIONS;
   }
+  // URL params override everything
+  params.entries().forEach(([key, value]) => { g_state.params.set(key, value); });
   g_state.params.set('output', DEFAULT_OUTPUT); // Too complicated to wait for MIDI output
+  // Always ensure renderer uses the current default if not specified in URL
+  if (!params.has('renderer')) {
+    g_state.params.set('renderer', DEFAULT_RENDERER);
+  }
   window.g_state = g_state;
 
   // Populate the samples list dynamically
   await populateSamplesList();
 
   // Build the UI.
+  const rendererValue = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
+  console.log('Setting renderer to:', rendererValue, 'DEFAULT_RENDERER:', DEFAULT_RENDERER);
   document.querySelectorAll('input[name="renderer"]').forEach(input => {
     input.addEventListener('change', handleRendererChange);
-    if (input.value === (g_state.params.get('renderer') ?? DEFAULT_RENDERER)) {
+    if (input.value === rendererValue) {
       input.checked = true;
+      console.log('Checked renderer radio:', input.value);
     }
   });
   document.getElementById('play').addEventListener('click', async () => {
