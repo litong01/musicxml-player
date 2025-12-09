@@ -35,3 +35,7 @@ There are 3 bundled implementations of `IMidiConverter` in this module:
 - Play xml files from dropdown box
 - Upload music xml file with match midi file or just xml file (midi gets generated automatically)
 - Use url which points to music xml on the web
+
+# Tips to create sheet music xml file using MuseScore
+- When create sheet music for percussion instruments such as drumset, you should do:
+    Percussion - Unpitched  -> Dum Kit (common)
