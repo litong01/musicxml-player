@@ -29,7 +29,9 @@ There are 3 bundled implementations of `IMidiConverter` in this module:
 
 # Try the application
 
-[Musicxml-player](https://musicxml-player.onrender.com)
+[Musicxml-player on Render.com](https://musicxml-player.onrender.com)
+[Musicxml-player on Cloud Run](https://musicxml-player-888861749871.us-east1.run.app/)
+https://tinyurl.com/musicxml-player
 
 # Main capabilities:
 - Play xml files from dropdown box
