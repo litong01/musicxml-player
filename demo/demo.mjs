@@ -33,6 +33,7 @@ const DEFAULT_OPTIONS = {
   horizontal: false,
   follow: true,
   mute: false,
+  respectLineBreaks: false,
 };
 
 const PLAYER_PLAYING = 1;
@@ -203,7 +204,14 @@ async function createRenderer(renderer, sheet, options) {
   switch (renderer) {
     case 'osmd':
       return new OpenSheetMusicDisplayRenderer({
-        newSystemFromXML: true,
+        newSystemFromXML: options.respectLineBreaks ?? false,
+      }, {
+        MinMeasureToDrawIndex: 0,
+        MaxMeasureToDrawIndex: Number.MAX_SAFE_INTEGER,
+        FillEmptyMeasuresWithWholeRests: true,
+        MinimumDistanceBetweenSystems: 7,
+        SystemLeftMargin: 0,
+        SystemRightMargin: 0,
       });
     case 'vrv':
       return new VerovioRenderer({
@@ -710,6 +718,7 @@ function handleOptionChange(e) {
     horizontal: false, // Always unchecked
     mute: !!document.getElementById('option-mute').checked,
     follow: true, // Always checked
+    respectLineBreaks: !!document.getElementById('respect-line-breaks').checked,
   };
   if (e.target.id === 'option-mute') {
     if (g_state.player) {
@@ -805,12 +814,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const stored = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEY));
     g_state.params = new URLSearchParams([...stored.params]);
-    // Use hardcoded options for rendering, only restore mute from storage
+    // Use hardcoded options for rendering, only restore mute and respectLineBreaks from storage
     g_state.options = {
       unroll: false,
       horizontal: false,
       follow: true,
       mute: stored.options?.mute || false,
+      respectLineBreaks: stored.options?.respectLineBreaks || false,
     };
   }
   catch {
@@ -971,6 +981,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     element.addEventListener('change', handleOptionChange);
   });
+  // Initialize and add listener for respect-line-breaks checkbox
+  const respectLineBreaksCheckbox = document.getElementById('respect-line-breaks');
+  respectLineBreaksCheckbox.checked = g_state.options.respectLineBreaks;
+  respectLineBreaksCheckbox.addEventListener('change', handleOptionChange);
   window.addEventListener('keydown', handlePlayPauseKey);
 
   // Settings modal controls
