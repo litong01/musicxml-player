@@ -219,6 +219,16 @@
               <input type="text" id="ireal" name="ireal" placeholder="https://example.com/song.musicxml or https://example.com/song.mxl"/>
               <small>Supports Google Drive sharing links</small>
             </div>
+
+            <div style="margin-top: 15px;">
+              <label style="font-weight: bold; font-size: 0.9em;">4. Select from playlists</label>
+              <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                <select id="active-playlist" style="flex: 1; padding: 5px;">
+                  <option value="">None (single song)</option>
+                </select>
+                <button id="manage-playlists-btn" style="padding: 8px 16px; background-color: #b8860b; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap;">Manage Playlists</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -275,6 +285,47 @@
           <span id="error"></span>
           <span id="download-musicxml"></span>
           <span id="download-midi"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Playlist Management Modal -->
+    <div id="playlist-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 3000; overflow-y: auto;">
+      <div style="background-color: white; margin: 50px auto; padding: 20px; max-width: 700px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="margin: 0;">Manage Playlists</h2>
+          <button id="close-playlist-modal" style="font-size: 1.5em; cursor: pointer; background: none; border: none; padding: 5px 10px;">✕</button>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <button id="create-playlist-btn" style="padding: 8px 16px; background-color: #b8860b; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">+ Create New Playlist</button>
+        </div>
+
+        <div id="playlists-container" style="margin-bottom: 20px;">
+          <!-- Playlists will be dynamically inserted here -->
+        </div>
+
+        <!-- Create/Edit Playlist Form -->
+        <div id="playlist-form" style="display: none; border: 2px solid #b8860b; padding: 15px; border-radius: 8px; margin-top: 20px;">
+          <h3 id="playlist-form-title" style="margin-top: 0;">Create New Playlist</h3>
+          
+          <div style="margin-bottom: 15px;">
+            <label for="playlist-name" style="font-weight: bold; display: block; margin-bottom: 5px;">Playlist Name:</label>
+            <input type="text" id="playlist-name" placeholder="My Playlist" style="width: 100%; padding: 8px; box-sizing: border-box;"/>
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <label style="font-weight: bold; display: block; margin-bottom: 5px;">Music URLs:</label>
+            <div id="playlist-urls" style="margin-bottom: 10px;">
+              <!-- URL inputs will be dynamically added here -->
+            </div>
+            <button id="add-url-btn" style="padding: 6px 12px; background-color: #d4a574; color: white; border: none; border-radius: 5px; cursor: pointer;">+ Add URL</button>
+          </div>
+
+          <div style="display: flex; gap: 10px;">
+            <button id="save-playlist-btn" style="padding: 8px 16px; background-color: #b8860b; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Save Playlist</button>
+            <button id="cancel-playlist-btn" style="padding: 8px 16px; background-color: #999; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancel</button>
+          </div>
         </div>
       </div>
     </div>

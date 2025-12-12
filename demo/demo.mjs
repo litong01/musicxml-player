@@ -39,6 +39,7 @@ const DEFAULT_OPTIONS = {
 const PLAYER_PLAYING = 1;
 
 const LOCALSTORAGE_KEY = 'musicxml-player';
+const PLAYLISTS_KEY = 'musicxml-player-playlists';
 
 const g_state = {
   webmidi: null,
@@ -808,6 +809,202 @@ async function populateSamplesList() {
   }
 }
 
+// ========== Playlist Management Functions ==========
+
+let currentEditingPlaylistId = null;
+
+function loadPlaylists() {
+  try {
+    const stored = localStorage.getItem(PLAYLISTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error loading playlists:', error);
+    return [];
+  }
+}
+
+function savePlaylists(playlists) {
+  try {
+    localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(playlists));
+  } catch (error) {
+    console.error('Error saving playlists:', error);
+  }
+}
+
+function renderPlaylists() {
+  const playlists = loadPlaylists();
+  const container = document.getElementById('playlists-container');
+  
+  if (playlists.length === 0) {
+    container.innerHTML = '<p style="color: #666; font-style: italic;">No playlists yet. Create one to get started!</p>';
+    return;
+  }
+
+  container.innerHTML = playlists.map(playlist => `
+    <div style="border: 1px solid #d4a574; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong>${escapeHtml(playlist.name)}</strong>
+          <span style="color: #666; margin-left: 10px;">(${playlist.urls.length} songs)</span>
+        </div>
+        <div style="display: flex; gap: 5px;">
+          <button class="edit-playlist-btn" data-id="${playlist.id}" style="padding: 5px 10px; background-color: #d4a574; color: white; border: none; border-radius: 3px; cursor: pointer;">Edit</button>
+          <button class="delete-playlist-btn" data-id="${playlist.id}" style="padding: 5px 10px; background-color: #c44; color: white; border: none; border-radius: 3px; cursor: pointer;">Delete</button>
+        </div>
+      </div>
+      <div style="margin-top: 5px; font-size: 0.9em; color: #666;">
+        ${playlist.urls.slice(0, 3).map(url => `<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">• ${escapeHtml(url)}</div>`).join('')}
+        ${playlist.urls.length > 3 ? `<div style="font-style: italic;">... and ${playlist.urls.length - 3} more</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  // Add event listeners
+  document.querySelectorAll('.edit-playlist-btn').forEach(btn => {
+    btn.addEventListener('click', () => editPlaylist(btn.dataset.id));
+  });
+  document.querySelectorAll('.delete-playlist-btn').forEach(btn => {
+    btn.addEventListener('click', () => deletePlaylist(btn.dataset.id));
+  });
+  
+  // Also update the playlist dropdown
+  populatePlaylistDropdown();
+}
+
+function populatePlaylistDropdown() {
+  const playlists = loadPlaylists();
+  const select = document.getElementById('active-playlist');
+  const currentValue = select.value;
+  
+  // Keep the "None" option and add all playlists
+  select.innerHTML = '<option value="">None (single song)</option>' + 
+    playlists.map(playlist => 
+      `<option value="${playlist.id}">${escapeHtml(playlist.name)} (${playlist.urls.length} songs)</option>`
+    ).join('');
+  
+  // Restore previous selection if it still exists
+  if (currentValue && playlists.find(p => p.id === currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showPlaylistForm(playlist = null) {
+  currentEditingPlaylistId = playlist ? playlist.id : null;
+  const form = document.getElementById('playlist-form');
+  const title = document.getElementById('playlist-form-title');
+  const nameInput = document.getElementById('playlist-name');
+  const urlsContainer = document.getElementById('playlist-urls');
+
+  title.textContent = playlist ? 'Edit Playlist' : 'Create New Playlist';
+  nameInput.value = playlist ? playlist.name : '';
+  
+  // Clear and populate URL inputs
+  urlsContainer.innerHTML = '';
+  const urls = playlist ? playlist.urls : [''];
+  urls.forEach((url, index) => {
+    addUrlInput(url, index);
+  });
+
+  form.style.display = 'block';
+}
+
+function hidePlaylistForm() {
+  document.getElementById('playlist-form').style.display = 'none';
+  currentEditingPlaylistId = null;
+}
+
+function addUrlInput(value = '', index = null) {
+  const urlsContainer = document.getElementById('playlist-urls');
+  const urlDiv = document.createElement('div');
+  urlDiv.style.cssText = 'display: flex; gap: 5px; margin-bottom: 8px; align-items: center;';
+  
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'playlist-url-input';
+  input.placeholder = 'https://example.com/song.musicxml';
+  input.value = value;
+  input.style.cssText = 'flex: 1; padding: 8px; box-sizing: border-box;';
+  
+  const removeBtn = document.createElement('button');
+  removeBtn.textContent = '✕';
+  removeBtn.style.cssText = 'padding: 5px 10px; background-color: #c44; color: white; border: none; border-radius: 3px; cursor: pointer;';
+  removeBtn.addEventListener('click', () => urlDiv.remove());
+  
+  urlDiv.appendChild(input);
+  urlDiv.appendChild(removeBtn);
+  urlsContainer.appendChild(urlDiv);
+}
+
+function editPlaylist(id) {
+  const playlists = loadPlaylists();
+  const playlist = playlists.find(p => p.id === id);
+  if (playlist) {
+    showPlaylistForm(playlist);
+  }
+}
+
+function deletePlaylist(id) {
+  if (!confirm('Are you sure you want to delete this playlist?')) return;
+  
+  const playlists = loadPlaylists();
+  const filtered = playlists.filter(p => p.id !== id);
+  savePlaylists(filtered);
+  renderPlaylists();
+}
+
+function savePlaylist() {
+  const nameInput = document.getElementById('playlist-name');
+  const name = nameInput.value.trim();
+  
+  if (!name) {
+    alert('Please enter a playlist name');
+    return;
+  }
+
+  const urlInputs = document.querySelectorAll('.playlist-url-input');
+  const urls = Array.from(urlInputs)
+    .map(input => input.value.trim())
+    .filter(url => url !== '');
+
+  if (urls.length === 0) {
+    alert('Please add at least one URL');
+    return;
+  }
+
+  const playlists = loadPlaylists();
+  
+  if (currentEditingPlaylistId) {
+    // Update existing playlist
+    const index = playlists.findIndex(p => p.id === currentEditingPlaylistId);
+    if (index !== -1) {
+      playlists[index] = {
+        ...playlists[index],
+        name,
+        urls
+      };
+    }
+  } else {
+    // Create new playlist
+    const newPlaylist = {
+      id: Date.now().toString(),
+      name,
+      urls,
+      createdAt: new Date().toISOString()
+    };
+    playlists.push(newPlaylist);
+  }
+
+  savePlaylists(playlists);
+  renderPlaylists();
+  hidePlaylistForm();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Load the parameters from local storage and/or the URL.
   const params = new URLSearchParams(document.location.search);
@@ -838,6 +1035,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Populate the samples list dynamically
   await populateSamplesList();
+
+  // Populate the playlist dropdown
+  populatePlaylistDropdown();
 
   // Build the UI.
   const rendererValue = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
@@ -975,6 +1175,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('ireal').addEventListener('change', handleIRealChange);
   document.getElementById('velocity').addEventListener('change', handleVelocityChange);
   document.getElementById('repeat').addEventListener('change', handleRepeatChange);
+  
+  // Playlist selection
+  document.getElementById('active-playlist').addEventListener('change', (e) => {
+    const playlistId = e.target.value;
+    if (playlistId) {
+      console.log('Playlist selected:', playlistId);
+      // TODO: Implement playlist playback in Phase 2
+      alert('Playlist playback will be implemented in Phase 2!\nFor now, you can create and manage playlists.');
+    } else {
+      console.log('Playlist deselected, back to single song mode');
+    }
+  });
+  
   document.querySelectorAll('.option').forEach(element => {
     if (!!g_state.options[element.id.replace('option-', '')]) {
       element.checked = true;
@@ -1018,6 +1231,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('ireal').addEventListener('change', () => {
     setTimeout(() => settingsModal.classList.remove('show'), 300);
+  });
+
+  // Playlist modal controls
+  const playlistModal = document.getElementById('playlist-modal');
+  const managePlaylistsBtn = document.getElementById('manage-playlists-btn');
+  const closePlaylistModal = document.getElementById('close-playlist-modal');
+  const createPlaylistBtn = document.getElementById('create-playlist-btn');
+  const cancelPlaylistBtn = document.getElementById('cancel-playlist-btn');
+  const savePlaylistBtn = document.getElementById('save-playlist-btn');
+  const addUrlBtn = document.getElementById('add-url-btn');
+
+  managePlaylistsBtn.addEventListener('click', () => {
+    renderPlaylists();
+    playlistModal.style.display = 'block';
+  });
+
+  closePlaylistModal.addEventListener('click', () => {
+    playlistModal.style.display = 'none';
+    hidePlaylistForm();
+  });
+
+  // Close playlist modal when clicking outside
+  playlistModal.addEventListener('click', (e) => {
+    if (e.target === playlistModal) {
+      playlistModal.style.display = 'none';
+      hidePlaylistForm();
+    }
+  });
+
+  createPlaylistBtn.addEventListener('click', () => {
+    showPlaylistForm();
+  });
+
+  cancelPlaylistBtn.addEventListener('click', () => {
+    hidePlaylistForm();
+  });
+
+  savePlaylistBtn.addEventListener('click', () => {
+    savePlaylist();
+  });
+
+  addUrlBtn.addEventListener('click', () => {
+    addUrlInput();
   });
 
   // Register service worker for PWA support
