@@ -137,10 +137,20 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
 
     // Get the measure duration from the Verovio timemap for accurate timing
     const timemapEntry = this._timemap[index];
-    const measureDuration = timemapEntry?.duration ?? 1000; // fallback to 1 second
+    if (!timemapEntry) {
+      console.warn(`[OpenSheetMusicDisplayRenderer.moveTo] No timemap entry for measure ${index}`);
+      return;
+    }
+    
+    const measureDuration = timemapEntry.duration;
     
     // Get the measure's musical duration (in whole note units)
     const measureMusicalDuration = measure.Duration.RealValue;
+    
+    if (measureMusicalDuration <= 0) {
+      console.warn(`[OpenSheetMusicDisplayRenderer.moveTo] Invalid measure duration ${measureMusicalDuration} for measure ${index}`);
+      return;
+    }
 
     // Find the voice entry that corresponds to the offset within the measure.
     // We need to map the offset (from Verovio timemap) to OSMD's voice entries

@@ -40,10 +40,10 @@ export class VerovioStaticConverter
             options.xsltProcessor,
           )
         : typeof this._timemapOrUri === 'string'
-          ? VerovioConverterBase._parseTimemap(
+          ? VerovioConverterBase.parseTimemap(
               await (await fetish(this._timemapOrUri)).json(),
             )
-          : VerovioConverterBase._parseTimemap(this._timemapOrUri);
+          : VerovioConverterBase.parseTimemap(this._timemapOrUri);
   }
 
   get midi(): ArrayBuffer {

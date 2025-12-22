@@ -5,7 +5,7 @@ export class VerovioConverterBase {
   /**
    * Parse a Verovio timemap into our timemap.
    */
-  protected static _parseTimemap(entries: TimeMapEntryFixed[]): MeasureTimemap {
+  public static parseTimemap(entries: TimeMapEntryFixed[]): MeasureTimemap {
     const timemap: MeasureTimemap = [];
     let tstamp = 0;
     entries.forEach((event) => {

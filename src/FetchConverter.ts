@@ -5,6 +5,10 @@ import type {
 } from './interfaces/IMIDIConverter';
 import { PlayerOptions } from './Player';
 import { assertIsDefined, fetish, parseMusicXmlTimemap } from './helpers';
+import createVerovioModule from 'verovio/wasm';
+import { VerovioToolkit } from 'verovio/esm';
+import { VerovioConverterBase } from './VerovioConverterBase';
+import type { VerovioToolkitFixed } from './VerovioTypes';
 
 /**
  * Implementation of IMIDIConverter that simply fetches given MIDI file and timemap JSON file URIs.
@@ -42,6 +46,26 @@ export class FetchConverter implements IMIDIConverter {
         : typeof this._timemapOrUri === 'string'
           ? <MeasureTimemap>await (await fetish(this._timemapOrUri)).json()
           : this._timemapOrUri;
+    
+    // Fallback: If XSL transformation failed and timemap is empty, use Verovio to generate it
+    if (this._timemap.length === 0) {
+      console.warn('[FetchConverter] Timemap is empty, falling back to Verovio for timemap generation');
+      try {
+        const VerovioModule = await createVerovioModule();
+        const vrv = <VerovioToolkitFixed>new VerovioToolkit(VerovioModule);
+        if (vrv.loadData(musicXml)) {
+          const vrvTimemap = vrv.renderToTimemap({
+            includeMeasures: true,
+            includeRests: true,
+          });
+          this._timemap = VerovioConverterBase.parseTimemap(vrvTimemap);
+          console.log(`[FetchConverter] Generated timemap with ${this._timemap.length} measures using Verovio`);
+        }
+        vrv.destroy();
+      } catch (error) {
+        console.error('[FetchConverter] Failed to generate timemap using Verovio:', error);
+      }
+    }
   }
 
   get midi(): ArrayBuffer {

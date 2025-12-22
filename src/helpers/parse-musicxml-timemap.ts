@@ -15,7 +15,7 @@ export async function parseMusicXmlTimemap(
     });
     return JSON.parse(timemap);
   } catch (error) {
-    console.error(`[parseMusicXmlTimemap] ${error}`);
+    console.warn(`[parseMusicXmlTimemap] XSL transformation failed, will use fallback: ${error}`);
   }
   return [];
 }
