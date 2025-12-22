@@ -1,4 +1,4 @@
-const CACHE_NAME = 'musicxml-player-v1';
+const CACHE_NAME = 'musicxml-player-v2';
 const urlsToCache = [
   '/',
   '/demo.mjs',
@@ -26,6 +26,17 @@ self.addEventListener('install', (event) => {
 
 // Fetch from cache first, then network
 self.addEventListener('fetch', (event) => {
+  const requestUrl = new URL(event.request.url);
+  
+  // Don't cache external resources (like CORS proxies, Google Drive, etc.)
+  // Only cache same-origin requests
+  if (requestUrl.origin !== location.origin) {
+    // For external URLs, just fetch without caching
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // For same-origin requests, use cache-first strategy
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

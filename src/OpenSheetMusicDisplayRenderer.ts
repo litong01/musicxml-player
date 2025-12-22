@@ -1,5 +1,6 @@
 import { assertIsDefined } from './helpers';
 import type { ISheetRenderer } from './interfaces/ISheetRenderer';
+import type { MeasureTimemap } from './interfaces/IMIDIConverter';
 import type {
   MeasureIndex,
   MillisecsTimestamp,
@@ -7,11 +8,9 @@ import type {
   PlayerOptions,
 } from './Player';
 import {
-  Fraction,
   IOSMDOptions,
   MusicPartManagerIterator,
   OpenSheetMusicDisplay,
-  SourceMeasure,
   VexFlowVoiceEntry,
   VexFlowMusicSheetCalculator,
   EngravingRules,
@@ -30,12 +29,46 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
   protected _currentMeasureIndex: MeasureIndex = 0;
   protected _currentVoiceEntryIndex: number = 0;
   protected _osmdOptions: IOSMDOptions;
+  protected _timemap: MeasureTimemap = [];
 
   constructor(
     osmdOptions?: IOSMDOptions,
     protected _engravingOptions?: EngravingRulesOptions,
   ) {
     this._osmdOptions = { ...osmdOptions };
+  }
+
+  /**
+   * Generate a timemap compatible with OSMD's timing calculations.
+   * This timemap uses OSMD's internal measure structure and timing.
+   */
+  generateTimemap() {
+    assertIsDefined(this._osmd);
+    const timemap: Array<{
+      measure: number;
+      timestamp: number;
+      duration: number;
+    }> = [];
+
+    let cumulativeTime = 0;
+    this._osmd.Sheet.SourceMeasures.forEach((measure, index) => {
+      // Calculate full measure duration based on time signature and tempo
+      // duration = (beats per measure) * (milliseconds per beat)
+      // milliseconds per beat = 60000 / BPM
+      const beatsPerMeasure = measure.Duration.RealValue * 4; // Convert to quarter note units
+      const millisecsPerBeat = 60000 / measure.TempoInBPM;
+      const measureDuration = beatsPerMeasure * millisecsPerBeat;
+      
+      timemap.push({
+        measure: index,
+        timestamp: cumulativeTime,
+        duration: measureDuration,
+      });
+      
+      cumulativeTime += measureDuration;
+    });
+
+    return timemap;
   }
 
   destroy(): void {
@@ -83,6 +116,10 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
       this._osmd.EngravingRules.ChordSymbolLabelTexts,
     );
     await this._osmd.load(musicXml);
+    
+    // Store the converter's timemap for accurate cursor positioning
+    this._timemap = options.converter.timemap;
+    
     this._redraw();
   }
 
@@ -94,18 +131,31 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     assertIsDefined(this._osmd);
     const measure = this._osmd.Sheet.SourceMeasures[index];
 
-    // Find the time within the measure.
+    if (!measure) {
+      return;
+    }
+
+    // Get the measure duration from the Verovio timemap for accurate timing
+    const timemapEntry = this._timemap[index];
+    const measureDuration = timemapEntry?.duration ?? 1000; // fallback to 1 second
+    
+    // Get the measure's musical duration (in whole note units)
+    const measureMusicalDuration = measure.Duration.RealValue;
+
+    // Find the voice entry that corresponds to the offset within the measure.
+    // We need to map the offset (from Verovio timemap) to OSMD's voice entries
     for (
       let v = measure.VerticalSourceStaffEntryContainers.length - 1;
       v >= 0;
       v--
     ) {
       const vsse = measure.VerticalSourceStaffEntryContainers[v]!;
+      // vsse.Timestamp is the musical time position within the measure (in whole note units)
+      // Convert from musical time to milliseconds using the ratio
+      const vsseTimeRatio = vsse.Timestamp.RealValue / measureMusicalDuration;
+      const vsseTime = vsseTimeRatio * measureDuration;
 
-      if (
-        this._timestampToMillisecs(measure, vsse.Timestamp) <=
-        offset + Number.EPSILON
-      ) {
+      if (vsseTime <= offset + Number.EPSILON) {
         // If same staff entry, do nothing.
         if (
           this._currentMeasureIndex !== index ||
@@ -116,9 +166,6 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
         return;
       }
     }
-    console.error(
-      `[OpenSheetMusicDisplayRenderer.moveTo] Could not find suitable staff entry at time ${offset} for measure ${index}`,
-    );
   }
 
   onResize(): void {
@@ -158,27 +205,25 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
             (<HTMLElement>(
               vfve.vfStaveNote?.getAttribute('el')
             ))?.addEventListener('click', () => {
+              // Use the Verovio timemap for accurate positioning
+              const timemapEntry = this._timemap[index];
+              const measureStart = timemapEntry?.timestamp ?? 0;
+              const measureDuration = timemapEntry?.duration ?? 1000;
+              const sourceMeasure = measure.parentSourceMeasure;
+              const measureMusicalDuration = sourceMeasure.Duration.RealValue;
+              const relativeOffsetRatio = se.relInMeasureTimestamp.RealValue / measureMusicalDuration;
+              const relativeOffset = relativeOffsetRatio * measureDuration;
+              
               this.player?.moveTo(
                 index,
-                this._timestampToMillisecs(
-                  measure.parentSourceMeasure,
-                  measure.parentSourceMeasure.AbsoluteTimestamp,
-                ),
-                this._timestampToMillisecs(
-                  measure.parentSourceMeasure,
-                  se.relInMeasureTimestamp,
-                ),
+                measureStart,
+                relativeOffset,
               );
             });
           });
         });
       });
     });
-  }
-
-  // Staff entry timestamp to actual time relative to measure start.
-  protected _timestampToMillisecs(measure: SourceMeasure, timestamp: Fraction) {
-    return (timestamp.RealValue * 4 * 60 * 1000) / measure.TempoInBPM;
   }
 
   protected _updateCursor(index: number, voiceEntryIndex: number) {

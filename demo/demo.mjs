@@ -48,6 +48,10 @@ const g_state = {
   musicXml: null,
   tuning: '',
   options: DEFAULT_OPTIONS,
+  // Playlist state
+  currentPlaylistId: null,
+  currentSongIndex: -1,
+  currentPlaylist: null,
 }
 
 async function createPlayer() {
@@ -89,11 +93,20 @@ async function createPlayer() {
 
   // Detect renderer and converter possibilities based on sheet.
   const base = sheet.startsWith('http') || sheet.startsWith('data/') ? sheet : `data/${sheet}`;
+  const isExternalUrl = sheet.startsWith('http');
+  
   for (const [k, v] of Object.entries({
     'vrv': true,
     'osmd': true,
   })) {
     const input = document.getElementById(`renderer-${k}`);
+    
+    // Skip HEAD requests for external URLs, just enable both renderers
+    if (isExternalUrl) {
+      input.disabled = false;
+      continue;
+    }
+    
     try {
       if (typeof v === 'string') {
         await fetish(base.replace(/\.\w+$/, v), { method: 'HEAD' });
@@ -114,9 +127,11 @@ async function createPlayer() {
   
   // Check if custom MIDI file exists in data directory
   try {
-    await fetish(base.replace(/\.\w+$/, '.mid'), { method: 'HEAD' });
+    const midiPath = base.replace(/\.\w+$/, '.mid');
+    await fetish(midiPath, { method: 'HEAD' });
     detectedConverter = 'midi';
-    console.log(`✓ Custom MIDI file found, using MIDI converter`);
+    console.log(`✓ Custom MIDI file found: ${midiPath}`);
+    console.log(`  Will use MIDI converter (pre-existing MIDI, not generated)`);
   }
   catch {
     // Check IndexedDB cache for uploaded MIDI files
@@ -138,7 +153,7 @@ async function createPlayer() {
   if (g_state.musicXml) {
     try {
       console.log(`Creating player with converter: ${converter}, renderer: ${renderer}`);
-      const converterInstance = await createConverter(converter, sheet, groove);
+      const converterInstance = await createConverter(converter, sheet, groove, renderer);
       console.log('Converter instance created:', converterInstance.constructor.name);
       
       const player = await Player.create({
@@ -159,9 +174,14 @@ async function createPlayer() {
 
       // Update the UI elements.
       console.log(`✓ Player created successfully`);
+      console.log(`  - followCursor option:`, options.follow);
       console.log(`  - MIDI size: ${player.midi.byteLength} bytes`);
       console.log(`  - Mute: ${options.mute}`);
       console.log(`  - Output: ${output}`);
+      console.log(`  - Renderer:`, renderer, player._options.renderer.constructor.name);
+      console.log(`  - Converter:`, converter, player._options.converter.constructor.name);
+      console.log(`  - Timemap entries:`, player._options.converter.timemap.length);
+      console.log(`  - First 3 timemap entries:`, player._options.converter.timemap.slice(0, 3));
       console.log(`  - Synthesizer:`, player._synthesizer);
       console.log(`  - Sequencer:`, player._sequencer);
       if (player._synthesizer) {
@@ -187,6 +207,9 @@ async function createPlayer() {
       g_state.player = player;
       g_state.options = options;
       savePlayerOptions();
+      
+      // Set up auto-advance monitoring for playlists
+      setupPlaylistAutoAdvance();
     }
     catch (error) {
       console.error('❌ Error creating player:', error);
@@ -233,7 +256,7 @@ async function createRenderer(renderer, sheet, options) {
   }
 }
 
-async function createConverter(converter, sheet, groove) {
+async function createConverter(converter, sheet, groove, renderer) {
   const base = sheet.startsWith('http') || sheet.startsWith('data/') ? sheet : `data/${sheet}`;
   
   // Extract base filename for cache lookup
@@ -249,8 +272,12 @@ async function createConverter(converter, sheet, groove) {
     if (cached) {
       console.log(`✓ Using cached MIDI for: ${sheet}`);
       console.log(`  MIDI type: ${cached.midi.constructor.name}, size: ${cached.midi.byteLength} bytes`);
-      console.log(`  Timemap entries: ${cached.timemap.length}`);
-      console.log(`  First timemap entry:`, cached.timemap[0]);
+      if (cached.timemap) {
+        console.log(`  Timemap entries: ${cached.timemap.length}`);
+        console.log(`  First timemap entry:`, cached.timemap[0]);
+      } else {
+        console.log(`  No timemap (timing will be calculated from score)`);
+      }
       
       // Ensure MIDI is an ArrayBuffer
       const midiBuffer = cached.midi instanceof ArrayBuffer ? cached.midi : cached.midi.buffer;
@@ -260,8 +287,6 @@ async function createConverter(converter, sheet, groove) {
       const header = String.fromCharCode(view[0], view[1], view[2], view[3]);
       console.log(`  MIDI header: "${header}" (should be "MThd")`);
       
-      // For now, just use the cached MIDI without validating events
-      // We'll see the issue in the player logs
       const fetchConverter = new FetchConverter(midiBuffer, cached.timemap);
       console.log('✓ Created FetchConverter with cached data');
       return fetchConverter;
@@ -274,12 +299,17 @@ async function createConverter(converter, sheet, groove) {
   switch (converter) {
     case 'midi':
       const midi = base.replace(/\.\w+$/, '.mid');
+      console.log(`📁 Loading pre-existing MIDI file: ${midi}`);
       try {
         const timemap = base.replace(/\.\w+$/, '.timemap.json');
         await fetish(timemap, { method: 'HEAD' });
+        console.log(`📁 Loading timemap file: ${timemap}`);
+        console.log(`✓ Using pre-existing MIDI + timemap (not generating)`);
         return new FetchConverter(midi, timemap);
       }
       catch {
+        console.log(`⚠️ No timemap file found for ${midi}`);
+        console.log(`  Timemap will be generated from MusicXML`);
         return new FetchConverter(midi);
       }
     case 'vrv':
@@ -323,12 +353,20 @@ function handlePlayPauseKey(e) {
 
 async function handleSampleSelect(e) {
   if (!e.target.value) return;
+  
+  // Clear playlist state when manually selecting a sample
+  clearPlaylistState();
+  
   let sheet = e.target.value;
   let option = document.querySelector(`#samples option[value="${sheet}"]`);
   if (!option) {
     sheet = DEFAULT_SHEET;
     option = document.querySelector(`#samples option[value="${sheet}"]`);
   }
+  
+  // Clear playlist state when manually selecting a sample
+  clearPlaylistState();
+  
   try {
     g_state.params.set('renderer', option.getAttribute('data-renderer'));
     g_state.params.set('converter', option.getAttribute('data-converter'));
@@ -367,6 +405,9 @@ async function handleIRealChange(e) {
   let url = e.target.value.trim();
   if (!url) return;
   
+  // Clear playlist state when manually entering a URL
+  clearPlaylistState();
+  
   try {
     // Convert Google Drive sharing URL to direct download URL
     if (url.includes('drive.google.com')) {
@@ -384,7 +425,7 @@ async function handleIRealChange(e) {
     } catch (directError) {
       // If direct fetch fails (likely CORS), try with a CORS proxy
       console.log('Direct fetch failed, trying CORS proxy...');
-      const corsProxy = 'https://corsproxy.io/?';
+      const corsProxy = 'https://api.allorigins.win/raw?url=';
       buffer = await (await fetish(corsProxy + encodeURIComponent(url))).arrayBuffer();
     }
     
@@ -425,8 +466,10 @@ async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
       await ensureMidiFile(filename, parseResult.musicXml);
     }
     
-    // Set converter to 'vrv' for uploaded files to generate MIDI on the fly
-    g_state.params.set('converter', 'vrv');
+    // For URL-loaded files, try using MuseScore converter which works better with OSMD renderer
+    // MuseScore's timemap has better alignment with OSMD's cursor tracking
+    const isUrl = filename.startsWith('http');
+    g_state.params.set('converter', isUrl ? 'ms' : 'vrv');
     
     createPlayer();
   }
@@ -504,7 +547,7 @@ async function ensureMidiFile(filename, musicXml) {
         new SaxonJSProcessor()
       );
       
-      // Store generated MIDI with timemap from original MusicXML
+      // Store generated MIDI with timemap
       await storeMidiFile(baseName, converter.midi, timemap);
     } catch (generationError) {
       console.error('Failed to generate MIDI:', generationError);
@@ -631,7 +674,11 @@ async function retrieveMidiFile(baseName) {
         if (result) {
           console.log(`Retrieved cached MIDI for: ${baseName}`);
           console.log(`  MIDI size: ${result.midi.byteLength} bytes`);
-          console.log(`  Timemap entries: ${result.timemap.length}`);
+          if (result.timemap) {
+            console.log(`  Timemap entries: ${result.timemap.length}`);
+          } else {
+            console.log(`  No timemap (will calculate timing from score)`);
+          }
         }
         db.close();
         resolve(result || null);
@@ -646,6 +693,9 @@ async function retrieveMidiFile(baseName) {
 }
 async function handleFileUpload(e) {
   const files = Array.from(e.target.files);
+  
+  // Clear playlist state when uploading files
+  clearPlaylistState();
   
   // Check if user uploaded both MusicXML and MIDI
   const musicXmlFile = files.find(f => f.name.match(/\.(musicxml|mxl|xml)$/i));
@@ -767,6 +817,7 @@ async function populateSamplesList() {
   try {
     // List of all MusicXML files in the data directory
     const musicFiles = [
+      '98.mxl',
       'asa-branca.musicxml',
       'baiao-miranda.musicxml',
       'blackwood-ex-29.musicxml',
@@ -812,6 +863,195 @@ async function populateSamplesList() {
 // ========== Playlist Management Functions ==========
 
 let currentEditingPlaylistId = null;
+
+// Load a song from URL (for playlist playback)
+async function loadSongFromUrl(url) {
+  try {
+    let fetchUrl = url;
+    
+    // Convert Google Drive sharing URL to direct download URL
+    if (url.includes('drive.google.com')) {
+      const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (fileIdMatch) {
+        fetchUrl = `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+        console.log('Converted Google Drive URL to:', fetchUrl);
+      }
+    }
+    
+    // Try to fetch the MusicXML file
+    let buffer;
+    try {
+      console.log('Attempting direct fetch:', fetchUrl);
+      const response = await fetish(fetchUrl);
+      console.log('Direct fetch response:', response.status, response.statusText);
+      buffer = await response.arrayBuffer();
+      console.log('Direct fetch succeeded, buffer size:', buffer.byteLength);
+    } catch (directError) {
+      // If direct fetch fails (likely CORS), try with a CORS proxy
+      console.log('Direct fetch failed:', directError.message);
+      console.log('Trying CORS proxy...');
+      
+      // Try allorigins.win which returns the content in a JSON wrapper
+      const corsProxy = 'https://api.allorigins.win/raw?url=';
+      const proxyUrl = corsProxy + encodeURIComponent(fetchUrl);
+      console.log('CORS proxy URL:', proxyUrl);
+      const response = await fetish(proxyUrl);
+      console.log('CORS proxy response:', response.status, response.statusText);
+      buffer = await response.arrayBuffer();
+      console.log('CORS proxy succeeded, buffer size:', buffer.byteLength);
+    }
+    
+    // Extract filename for display and caching
+    const filename = url.split('/').pop().split('?')[0] || 'remote-file.musicxml';
+    
+    // Use the same handling as file uploads
+    await handleFileBuffer(filename, buffer);
+    
+    // Override the sheet parameter with the original URL
+    g_state.params.set('sheet', url);
+    
+    // Update the URL input field
+    document.getElementById('ireal').value = url;
+    
+    // Clear any error messages
+    document.getElementById('error').textContent = '';
+    
+    return true;
+  } catch (error) {
+    console.error('Error loading song from URL:', error);
+    const errorMsg = error.message || 'Unknown error';
+    document.getElementById('error').textContent = `Failed to load song: ${errorMsg}`;
+    return false;
+  }
+}
+
+// Update playlist display in UI
+function updatePlaylistDisplay() {
+  const playlistInfo = document.getElementById('playlist-info');
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  
+  if (g_state.currentPlaylist && g_state.currentSongIndex >= 0) {
+    // Show playlist info
+    const songNum = g_state.currentSongIndex + 1;
+    const totalSongs = g_state.currentPlaylist.urls.length;
+    const currentUrl = g_state.currentPlaylist.urls[g_state.currentSongIndex];
+    const songName = currentUrl.split('/').pop().split('?')[0];
+    
+    playlistInfo.textContent = `Playlist: ${g_state.currentPlaylist.name} | Song ${songNum}/${totalSongs}: ${songName}`;
+    playlistInfo.style.display = 'block';
+    
+    // Show/enable prev/next buttons
+    prevBtn.style.display = 'inline-block';
+    nextBtn.style.display = 'inline-block';
+    prevBtn.disabled = songNum === 1;
+    nextBtn.disabled = songNum === totalSongs;
+  } else {
+    // Hide playlist info and navigation buttons
+    playlistInfo.style.display = 'none';
+    prevBtn.style.display = 'none';
+    nextBtn.style.display = 'none';
+  }
+}
+
+// Navigate to previous song in playlist
+async function playPreviousSong() {
+  if (!g_state.currentPlaylist || g_state.currentSongIndex <= 0) return;
+  
+  g_state.currentSongIndex--;
+  const url = g_state.currentPlaylist.urls[g_state.currentSongIndex];
+  const success = await loadSongFromUrl(url);
+  if (success) {
+    updatePlaylistDisplay();
+  } else {
+    // Revert on error
+    g_state.currentSongIndex++;
+  }
+}
+
+// Navigate to next song in playlist
+async function playNextSong() {
+  if (!g_state.currentPlaylist || g_state.currentSongIndex >= g_state.currentPlaylist.urls.length - 1) return;
+  
+  g_state.currentSongIndex++;
+  const url = g_state.currentPlaylist.urls[g_state.currentSongIndex];
+  const success = await loadSongFromUrl(url);
+  if (success) {
+    updatePlaylistDisplay();
+  } else {
+    // Revert on error
+    g_state.currentSongIndex--;
+  }
+}
+
+// Set up auto-advance monitoring for playlist playback
+let playbackMonitorInterval = null;
+let wasPlaying = false;
+
+function clearPlaylistState() {
+  // Clear playlist state
+  g_state.currentPlaylistId = null;
+  g_state.currentPlaylist = null;
+  g_state.currentSongIndex = -1;
+  
+  // Reset playlist dropdown
+  const playlistDropdown = document.getElementById('active-playlist');
+  if (playlistDropdown) {
+    playlistDropdown.value = '';
+  }
+  
+  // Update display
+  updatePlaylistDisplay();
+  
+  // Clear monitoring interval
+  if (playbackMonitorInterval) {
+    clearInterval(playbackMonitorInterval);
+    playbackMonitorInterval = null;
+  }
+}
+
+function setupPlaylistAutoAdvance() {
+  // Clear any existing monitor
+  if (playbackMonitorInterval) {
+    clearInterval(playbackMonitorInterval);
+    playbackMonitorInterval = null;
+  }
+  
+  // Only set up monitoring if we're in playlist mode
+  if (!g_state.currentPlaylist || !g_state.player) return;
+  
+  wasPlaying = false;
+  
+  // Monitor playback state
+  playbackMonitorInterval = setInterval(() => {
+    if (!g_state.player || !g_state.currentPlaylist) {
+      clearInterval(playbackMonitorInterval);
+      playbackMonitorInterval = null;
+      return;
+    }
+    
+    const isPlaying = g_state.player.state === PLAYER_PLAYING;
+    const position = g_state.player.position;
+    const duration = g_state.player.duration;
+    
+    // Detect when playback stops after being in playing state
+    // Check if we're within 100ms of the end
+    if (wasPlaying && !isPlaying && duration > 0 && position >= duration - 0.1) {
+      console.log('Song finished, auto-advancing to next song');
+      wasPlaying = false;
+      
+      // Auto-advance to next song
+      if (g_state.currentSongIndex < g_state.currentPlaylist.urls.length - 1) {
+        playNextSong();
+      } else {
+        console.log('Reached end of playlist');
+        updatePlaylistDisplay();
+      }
+    } else {
+      wasPlaying = isPlaying;
+    }
+  }, 500); // Check every 500ms
+}
 
 function loadPlaylists() {
   try {
@@ -1170,6 +1410,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('Rewind button clicked');
     g_state.player?.rewind();
   });
+  
+  // Playlist navigation buttons
+  document.getElementById('prev').addEventListener('click', async () => {
+    console.log('Previous button clicked');
+    await playPreviousSong();
+  });
+  
+  document.getElementById('next').addEventListener('click', async () => {
+    console.log('Next button clicked');
+    await playNextSong();
+  });
+  
   document.getElementById('upload').addEventListener('change', handleFileUpload);
   document.getElementById('samples').addEventListener('change', handleSampleSelect);
   document.getElementById('ireal').addEventListener('change', handleIRealChange);
@@ -1177,14 +1429,39 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('repeat').addEventListener('change', handleRepeatChange);
   
   // Playlist selection
-  document.getElementById('active-playlist').addEventListener('change', (e) => {
+  document.getElementById('active-playlist').addEventListener('change', async (e) => {
     const playlistId = e.target.value;
     if (playlistId) {
       console.log('Playlist selected:', playlistId);
-      // TODO: Implement playlist playback in Phase 2
-      alert('Playlist playback will be implemented in Phase 2!\nFor now, you can create and manage playlists.');
+      
+      // Load the playlist
+      const playlists = loadPlaylists();
+      const playlist = playlists.find(p => p.id === playlistId);
+      
+      if (playlist && playlist.urls.length > 0) {
+        // Store playlist state
+        g_state.currentPlaylistId = playlistId;
+        g_state.currentPlaylist = playlist;
+        g_state.currentSongIndex = 0;
+        
+        // Load the first song
+        const success = await loadSongFromUrl(playlist.urls[0]);
+        if (success) {
+          updatePlaylistDisplay();
+        } else {
+          // Reset playlist state on error
+          g_state.currentPlaylistId = null;
+          g_state.currentPlaylist = null;
+          g_state.currentSongIndex = -1;
+        }
+      }
     } else {
+      // Deselect playlist, back to single song mode
       console.log('Playlist deselected, back to single song mode');
+      g_state.currentPlaylistId = null;
+      g_state.currentPlaylist = null;
+      g_state.currentSongIndex = -1;
+      updatePlaylistDisplay();
     }
   });
   

@@ -241,6 +241,9 @@ export class Player {
     this.mute = this._options.mute;
     this._sequencer.playbackRate = this._options.velocity;
     this._sequencer.loopCount = this._options.repeat;
+    
+    // Move cursor to the start position (measure 0, timestamp 0)
+    this._options.renderer.moveTo(0, 0, 0, 0);
 
     // Handling DOM events.
     this._observer = new ResizeObserver(
@@ -315,7 +318,6 @@ export class Player {
       if (this.state !== PlayerState.Playing) return;
 
       // Lookup the current measure number by binary-searching the timemap.
-      // TODO Optimize search by starting at current measure.
       const timestamp = this.position;
       const index = binarySearch(
         this._options.converter.timemap,
@@ -337,12 +339,14 @@ export class Player {
           index >= 0 ? index : Math.max(0, -index - 2)
         ];
 
-      this._options.renderer.moveTo(
-        entry.measure,
-        entry.timestamp,
-        Math.max(0, timestamp - entry.timestamp),
-        entry.duration,
-      );
+      if (entry) {
+        this._options.renderer.moveTo(
+          entry.measure,
+          entry.timestamp,
+          Math.max(0, timestamp - entry.timestamp),
+          entry.duration,
+        );
+      }
 
       // Schedule next cursor movement.
       requestAnimationFrame(synchronizeMidi);
