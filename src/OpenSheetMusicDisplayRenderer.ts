@@ -135,38 +135,33 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
       return;
     }
 
-    // Get the measure duration from the Verovio timemap for accurate timing
+    // Get timing information from the Verovio timemap
     const timemapEntry = this._timemap[index];
     if (!timemapEntry) {
-      console.warn(`[OpenSheetMusicDisplayRenderer.moveTo] No timemap entry for measure ${index}`);
       return;
     }
     
     const measureDuration = timemapEntry.duration;
-    
-    // Get the measure's musical duration (in whole note units)
     const measureMusicalDuration = measure.Duration.RealValue;
     
     if (measureMusicalDuration <= 0) {
-      console.warn(`[OpenSheetMusicDisplayRenderer.moveTo] Invalid measure duration ${measureMusicalDuration} for measure ${index}`);
       return;
     }
 
-    // Find the voice entry that corresponds to the offset within the measure.
-    // We need to map the offset (from Verovio timemap) to OSMD's voice entries
+    // Find the voice entry closest to the playback offset.
+    // Iterate backwards to find the last entry that starts before or at the offset.
     for (
       let v = measure.VerticalSourceStaffEntryContainers.length - 1;
       v >= 0;
       v--
     ) {
       const vsse = measure.VerticalSourceStaffEntryContainers[v]!;
-      // vsse.Timestamp is the musical time position within the measure (in whole note units)
-      // Convert from musical time to milliseconds using the ratio
+      
+      // Convert OSMD's musical time (whole note units) to milliseconds
       const vsseTimeRatio = vsse.Timestamp.RealValue / measureMusicalDuration;
       const vsseTime = vsseTimeRatio * measureDuration;
 
       if (vsseTime <= offset + Number.EPSILON) {
-        // If same staff entry, do nothing.
         if (
           this._currentMeasureIndex !== index ||
           this._currentVoiceEntryIndex !== v

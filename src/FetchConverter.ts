@@ -47,24 +47,37 @@ export class FetchConverter implements IMIDIConverter {
           ? <MeasureTimemap>await (await fetish(this._timemapOrUri)).json()
           : this._timemapOrUri;
     
-    // Fallback: If XSL transformation failed and timemap is empty, use Verovio to generate it
+    // Fallback: If XSL transformation failed, use Verovio to generate timemap
     if (this._timemap.length === 0) {
-      console.warn('[FetchConverter] Timemap is empty, falling back to Verovio for timemap generation');
-      try {
-        const VerovioModule = await createVerovioModule();
-        const vrv = <VerovioToolkitFixed>new VerovioToolkit(VerovioModule);
-        if (vrv.loadData(musicXml)) {
-          const vrvTimemap = vrv.renderToTimemap({
-            includeMeasures: true,
-            includeRests: true,
-          });
-          this._timemap = VerovioConverterBase.parseTimemap(vrvTimemap);
-          console.log(`[FetchConverter] Generated timemap with ${this._timemap.length} measures using Verovio`);
-        }
-        vrv.destroy();
-      } catch (error) {
-        console.error('[FetchConverter] Failed to generate timemap using Verovio:', error);
+      this._timemap = await this._generateTimemapWithVerovio(musicXml);
+    }
+  }
+
+  /**
+   * Generate timemap using Verovio as fallback when XSL transformation fails.
+   */
+  private async _generateTimemapWithVerovio(
+    musicXml: string,
+  ): Promise<MeasureTimemap> {
+    try {
+      const VerovioModule = await createVerovioModule();
+      const vrv = <VerovioToolkitFixed>new VerovioToolkit(VerovioModule);
+      
+      if (!vrv.loadData(musicXml)) {
+        return [];
       }
+      
+      const vrvTimemap = vrv.renderToTimemap({
+        includeMeasures: true,
+        includeRests: true,
+      });
+      const timemap = VerovioConverterBase.parseTimemap(vrvTimemap);
+      vrv.destroy();
+      
+      return timemap;
+    } catch (error) {
+      console.error('[FetchConverter] Verovio timemap generation failed:', error);
+      return [];
     }
   }
 

@@ -14,8 +14,8 @@ export async function parseMusicXmlTimemap(
       useSef: true,
     });
     return JSON.parse(timemap);
-  } catch (error) {
-    console.warn(`[parseMusicXmlTimemap] XSL transformation failed, will use fallback: ${error}`);
+  } catch {
+    // XSL transformation failed - return empty array to trigger Verovio fallback
+    return [];
   }
-  return [];
 }
