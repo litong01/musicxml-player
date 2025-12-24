@@ -29,6 +29,17 @@ const DEFAULT_CONVERTER = 'vrv';
 const DEFAULT_VELOCITY = 1;
 const DEFAULT_REPEAT = 0;
 
+// Intercept Verovio font loading errors and downgrade to warnings
+const originalError = console.error;
+console.error = function(...args) {
+  const message = args.join(' ');
+  if (message.includes('SMuFL glyphs') || message.includes('Leipzig font')) {
+    console.warn(...args);
+  } else {
+    originalError.apply(console, args);
+  }
+};
+
 // List of CORS proxies to try in order
 const CORS_PROXIES = [
   '/proxy?url=',  // Our own backend proxy (most reliable)
