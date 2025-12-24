@@ -12,6 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="icon-192.svg">
     <title>MusicXML Player</title>
     <style>
+      /* Suppress CSS pointer-events warnings from OSMD */
+      g[pointer-events] {
+        pointer-events: all !important;
+      }
+      
       body {
         background-color: white;
         overflow-x: none;
@@ -164,7 +169,7 @@
       }
     </style>
     <link rel="stylesheet" href="build/musicxml-player.css">
-    <script type="module" src="demo.mjs"></script>
+    <script type="module" src="demo.mjs?v=12"></script>
   </head>
   <body>
     <div id="header">

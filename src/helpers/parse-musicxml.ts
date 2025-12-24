@@ -13,6 +13,15 @@ export async function parseMusicXml(
   queries?: MusicXmlParseQuery,
 ): Promise<MusicXmlParseResult> {
   if (musicXmlOrBuffer instanceof ArrayBuffer) {
+    // Check if it's a compressed file (ZIP/MXL) by looking for PK header
+    const first2Bytes = new Uint8Array(musicXmlOrBuffer.slice(0, 2));
+    const isZip = first2Bytes[0] === 0x50 && first2Bytes[1] === 0x4B; // PK
+    
+    if (isZip) {
+      // It's a compressed file, parse directly as ZIP
+      return await _parseCompressed(xsltProcessor, musicXmlOrBuffer, queries);
+    }
+    
     // Decode the buffer and try it as an uncompressed document.
     let musicXml = new TextDecoder().decode(musicXmlOrBuffer);
     

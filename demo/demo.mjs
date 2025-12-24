@@ -28,6 +28,48 @@ const DEFAULT_GROOVE = 'Default';
 const DEFAULT_CONVERTER = 'vrv';
 const DEFAULT_VELOCITY = 1;
 const DEFAULT_REPEAT = 0;
+
+// List of CORS proxies to try in order
+const CORS_PROXIES = [
+  '/proxy?url=',  // Our own backend proxy (most reliable)
+  'https://corsproxy.io/?',
+  'https://api.allorigins.win/raw?url=',
+];
+
+/**
+ * Fetch a file from an external URL using the backend proxy.
+ * The proxy handles URL conversion (Google Drive, Dropbox, etc.) and domain validation.
+ */
+async function fetchExternalUrl(url) {
+  console.log('[fetchExternalUrl] Starting fetch for:', url);
+  
+  // All external URLs go through the proxy to ensure proper handling
+  // The server will:
+  // 1. Validate the domain is allowed
+  // 2. Convert cloud storage URLs (Google Drive, Dropbox, OneDrive)
+  // 3. Fetch the file without CORS restrictions
+  // 4. Return the actual file content
+  
+  // Try each proxy in order (our own backend proxy first)
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const proxyUrl = proxy + encodeURIComponent(url);
+      console.log('[fetchExternalUrl] Trying proxy:', proxyUrl);
+      const response = await fetish(proxyUrl);
+      if (response.ok) {
+        console.log('[fetchExternalUrl] Success! Response size:', response.headers.get('content-length'));
+        return await response.arrayBuffer();
+      }
+    } catch (error) {
+      console.log('[fetchExternalUrl] Proxy failed:', proxy, error.message);
+      // This proxy failed, try the next one
+      continue;
+    }
+  }
+  
+  // All proxies failed
+  throw new Error(`Unable to fetch ${url}. All CORS proxies failed.`);
+}
 const DEFAULT_OPTIONS = {
   unroll: false,
   horizontal: false,
@@ -125,23 +167,32 @@ async function createPlayer() {
   // Auto-detect converter: prefer custom MIDI if available, otherwise use Verovio
   let detectedConverter = 'vrv'; // Default to Verovio
   
-  // Check if custom MIDI file exists in data directory
-  try {
-    const midiPath = base.replace(/\.\w+$/, '.mid');
-    await fetish(midiPath, { method: 'HEAD' });
-    detectedConverter = 'midi';
-    console.log(`✓ Custom MIDI file found: ${midiPath}`);
-    console.log(`  Will use MIDI converter (pre-existing MIDI, not generated)`);
-  }
-  catch {
-    // Check IndexedDB cache for uploaded MIDI files
-    if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
-      const baseName = sheet.replace(/\.(musicxml|mxl|xml)$/i, '');
-      const cached = await retrieveMidiFile(baseName);
-      if (cached) {
-        detectedConverter = 'midi';
-        console.log(`✓ MIDI converter available (cached): ${baseName}`);
+  // Check if custom MIDI file exists in data directory (skip for external URLs)
+  const baseName = base.replace(/\.(musicxml|mxl|xml)$/i, '').replace(/^data\//, '');
+  if (baseName !== 'remote-file') {
+    try {
+      const midiPath = base.replace(/\.\w+$/, '.mid');
+      await fetish(midiPath, { method: 'HEAD' });
+      detectedConverter = 'midi';
+      console.log(`✓ Custom MIDI file found: ${midiPath}`);
+      console.log(`  Will use MIDI converter (pre-existing MIDI, not generated)`);
+    }
+    catch {
+      // Check IndexedDB cache for uploaded MIDI files
+      if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
+        const cached = await retrieveMidiFile(baseName);
+        if (cached) {
+          detectedConverter = 'midi';
+          console.log(`✓ MIDI converter available (cached): ${baseName}`);
+        }
       }
+    }
+  } else {
+    // For external URLs, check IndexedDB cache only
+    const cached = await retrieveMidiFile(baseName);
+    if (cached) {
+      detectedConverter = 'midi';
+      console.log(`✓ MIDI converter available (cached): ${baseName}`);
     }
   }
   
@@ -409,28 +460,25 @@ async function handleIRealChange(e) {
   clearPlaylistState();
   
   try {
-    // Convert Google Drive sharing URL to direct download URL
-    if (url.includes('drive.google.com')) {
-      const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (fileIdMatch) {
-        url = `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
-        console.log('Converted Google Drive URL to:', url);
-      }
-    }
+    // Fetch the file using the generic helper (handles CORS automatically)
+    const buffer = await fetchExternalUrl(url);
     
-    // Try to fetch the MusicXML file directly
-    let buffer;
-    try {
-      buffer = await (await fetish(url)).arrayBuffer();
-    } catch (directError) {
-      // If direct fetch fails (likely CORS), try with a CORS proxy
-      console.log('Direct fetch failed, trying CORS proxy...');
-      const corsProxy = 'https://api.allorigins.win/raw?url=';
-      buffer = await (await fetish(corsProxy + encodeURIComponent(url))).arrayBuffer();
-    }
+    console.log('[handleIRealChange] Received buffer, size:', buffer.byteLength);
+    console.log('[handleIRealChange] First 50 bytes:', new Uint8Array(buffer.slice(0, 50)));
     
     // Extract filename for display and caching
-    const filename = e.target.value.split('/').pop().split('?')[0] || 'remote-file.musicxml';
+    // For Google Drive/Dropbox/OneDrive URLs, use a generic name
+    let filename;
+    if (url.includes('drive.google.com') || url.includes('dropbox.com') || url.includes('onedrive.live.com')) {
+      // Determine file extension from buffer content
+      const first4Bytes = new Uint8Array(buffer.slice(0, 4));
+      const isPK = first4Bytes[0] === 0x50 && first4Bytes[1] === 0x4B; // PK (ZIP/MXL)
+      filename = isPK ? 'remote-file.mxl' : 'remote-file.musicxml';
+    } else {
+      filename = url.split('/').pop().split('?')[0] || 'remote-file.musicxml';
+    }
+    
+    console.log('[handleIRealChange] Using filename:', filename);
     
     // Store the original URL before calling handleFileBuffer
     const originalUrl = e.target.value;
@@ -454,7 +502,9 @@ async function handleIRealChange(e) {
 
 async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
   try {
+    console.log('[handleFileBuffer] Starting to parse MusicXML, filename:', filename);
     const parseResult = await parseMusicXml(buffer, new SaxonJSProcessor());
+    console.log('[handleFileBuffer] Successfully parsed MusicXML');
     g_state.musicXml = parseResult.musicXml;
     g_state.params.set('sheet', filename);
     
@@ -493,29 +543,36 @@ async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
  */
 async function ensureMidiFile(filename, musicXml) {
   const baseName = filename.replace(/\.(musicxml|mxl|xml)$/i, '');
-  const midiPath = `data/${baseName}.mid`;
   
+  // Skip checking for MIDI file if this is an external URL (remote-file)
+  // We know it won't exist on the server
+  if (baseName !== 'remote-file') {
+    const midiPath = `data/${baseName}.mid`;
+    
+    // Try to fetch existing MIDI file from data directory (suppress 404 errors)
+    const midiResponse = await fetch(midiPath);
+    if (midiResponse.ok) {
+      // Found existing MIDI file, use it
+      const midiBuffer = await midiResponse.arrayBuffer();
+      
+      // Generate timemap from MusicXML
+      const timemap = await parseMusicXmlTimemap(
+        musicXml,
+        'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
+        new SaxonJSProcessor()
+      );
+      
+      // Store MIDI from data directory in cache for future use
+      await storeMidiFile(baseName, midiBuffer, timemap);
+      return;
+    }
+  }
+  
+  // MIDI file doesn't exist in data directory, generate it
   try {
-    // Try to fetch existing MIDI file from data directory
-    const midiResponse = await fetish(midiPath);
-    const midiBuffer = await midiResponse.arrayBuffer();
-    
-    // Generate timemap from MusicXML
-    const timemap = await parseMusicXmlTimemap(
-      musicXml,
-      'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
-      new SaxonJSProcessor()
-    );
-    
-    // Store MIDI from data directory in cache for future use
-    await storeMidiFile(baseName, midiBuffer, timemap);
-    return;
-  } catch (error) {
-    // MIDI file doesn't exist in data directory, generate it
-    try {
-      // Convert unpitched percussion to pitched notes before Verovio processing
-      // This allows Verovio to generate proper MIDI with Note On/Off events
-      const processedMusicXml = convertUnpitchedToPitched(musicXml);
+    // Convert unpitched percussion to pitched notes before Verovio processing
+    // This allows Verovio to generate proper MIDI with Note On/Off events
+    const processedMusicXml = convertUnpitchedToPitched(musicXml);
       
       // Use Verovio to generate MIDI and timemap
       const converter = new VerovioConverter({
@@ -549,10 +606,9 @@ async function ensureMidiFile(filename, musicXml) {
       
       // Store generated MIDI with timemap
       await storeMidiFile(baseName, converter.midi, timemap);
-    } catch (generationError) {
-      console.error('Failed to generate MIDI:', generationError);
-      // Don't throw - player will fall back to runtime conversion
-    }
+  } catch (generationError) {
+    console.error('Failed to generate MIDI:', generationError);
+    // Don't throw - player will fall back to runtime conversion
   }
 }
 
@@ -867,42 +923,25 @@ let currentEditingPlaylistId = null;
 // Load a song from URL (for playlist playback)
 async function loadSongFromUrl(url) {
   try {
-    let fetchUrl = url;
+    // Fetch the file using the generic helper (handles CORS automatically)
+    const buffer = await fetchExternalUrl(url);
     
-    // Convert Google Drive sharing URL to direct download URL
-    if (url.includes('drive.google.com')) {
-      const fileIdMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (fileIdMatch) {
-        fetchUrl = `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
-        console.log('Converted Google Drive URL to:', fetchUrl);
-      }
-    }
-    
-    // Try to fetch the MusicXML file
-    let buffer;
-    try {
-      console.log('Attempting direct fetch:', fetchUrl);
-      const response = await fetish(fetchUrl);
-      console.log('Direct fetch response:', response.status, response.statusText);
-      buffer = await response.arrayBuffer();
-      console.log('Direct fetch succeeded, buffer size:', buffer.byteLength);
-    } catch (directError) {
-      // If direct fetch fails (likely CORS), try with a CORS proxy
-      console.log('Direct fetch failed:', directError.message);
-      console.log('Trying CORS proxy...');
-      
-      // Try allorigins.win which returns the content in a JSON wrapper
-      const corsProxy = 'https://api.allorigins.win/raw?url=';
-      const proxyUrl = corsProxy + encodeURIComponent(fetchUrl);
-      console.log('CORS proxy URL:', proxyUrl);
-      const response = await fetish(proxyUrl);
-      console.log('CORS proxy response:', response.status, response.statusText);
-      buffer = await response.arrayBuffer();
-      console.log('CORS proxy succeeded, buffer size:', buffer.byteLength);
-    }
+    console.log('[loadSongFromUrl] Received buffer, size:', buffer.byteLength);
+    console.log('[loadSongFromUrl] First 50 bytes:', new Uint8Array(buffer.slice(0, 50)));
     
     // Extract filename for display and caching
-    const filename = url.split('/').pop().split('?')[0] || 'remote-file.musicxml';
+    // For Google Drive/Dropbox/OneDrive URLs, use a generic name
+    let filename;
+    if (url.includes('drive.google.com') || url.includes('dropbox.com') || url.includes('onedrive.live.com')) {
+      // Determine file extension from buffer content
+      const first4Bytes = new Uint8Array(buffer.slice(0, 4));
+      const isPK = first4Bytes[0] === 0x50 && first4Bytes[1] === 0x4B; // PK (ZIP/MXL)
+      filename = isPK ? 'remote-file.mxl' : 'remote-file.musicxml';
+    } else {
+      filename = url.split('/').pop().split('?')[0] || 'remote-file.musicxml';
+    }
+    
+    console.log('[loadSongFromUrl] Using filename:', filename);
     
     // Use the same handling as file uploads
     await handleFileBuffer(filename, buffer);
