@@ -52,8 +52,6 @@ const CORS_PROXIES = [
  * The proxy handles URL conversion (Google Drive, Dropbox, etc.) and domain validation.
  */
 async function fetchExternalUrl(url) {
-  console.log('[fetchExternalUrl] Starting fetch for:', url);
-  
   // All external URLs go through the proxy to ensure proper handling
   // The server will:
   // 1. Validate the domain is allowed
@@ -65,14 +63,11 @@ async function fetchExternalUrl(url) {
   for (const proxy of CORS_PROXIES) {
     try {
       const proxyUrl = proxy + encodeURIComponent(url);
-      console.log('[fetchExternalUrl] Trying proxy:', proxyUrl);
       const response = await fetish(proxyUrl);
       if (response.ok) {
-        console.log('[fetchExternalUrl] Success! Response size:', response.headers.get('content-length'));
         return await response.arrayBuffer();
       }
     } catch (error) {
-      console.log('[fetchExternalUrl] Proxy failed:', proxy, error.message);
       // This proxy failed, try the next one
       continue;
     }
@@ -185,8 +180,6 @@ async function createPlayer() {
       const midiPath = base.replace(/\.\w+$/, '.mid');
       await fetish(midiPath, { method: 'HEAD' });
       detectedConverter = 'midi';
-      console.log(`✓ Custom MIDI file found: ${midiPath}`);
-      console.log(`  Will use MIDI converter (pre-existing MIDI, not generated)`);
     }
     catch {
       // Check IndexedDB cache for uploaded MIDI files
@@ -194,7 +187,6 @@ async function createPlayer() {
         const cached = await retrieveMidiFile(baseName);
         if (cached) {
           detectedConverter = 'midi';
-          console.log(`✓ MIDI converter available (cached): ${baseName}`);
         }
       }
     }
@@ -203,20 +195,16 @@ async function createPlayer() {
     const cached = await retrieveMidiFile(baseName);
     if (cached) {
       detectedConverter = 'midi';
-      console.log(`✓ MIDI converter available (cached): ${baseName}`);
     }
   }
   
   // Override converter parameter with auto-detected value
   converter = detectedConverter;
-  console.log(`Using converter: ${converter}`);
 
   // Create new player.
   if (g_state.musicXml) {
     try {
-      console.log(`Creating player with converter: ${converter}, renderer: ${renderer}`);
       const converterInstance = await createConverter(converter, sheet, groove, renderer);
-      console.log('Converter instance created:', converterInstance.constructor.name);
       
       const player = await Player.create({
         musicXml: g_state.musicXml,
@@ -235,21 +223,6 @@ async function createPlayer() {
       });
 
       // Update the UI elements.
-      console.log(`✓ Player created successfully`);
-      console.log(`  - followCursor option:`, options.follow);
-      console.log(`  - MIDI size: ${player.midi.byteLength} bytes`);
-      console.log(`  - Mute: ${options.mute}`);
-      console.log(`  - Output: ${output}`);
-      console.log(`  - Renderer:`, renderer, player._options.renderer.constructor.name);
-      console.log(`  - Converter:`, converter, player._options.converter.constructor.name);
-      console.log(`  - Timemap entries:`, player._options.converter.timemap.length);
-      console.log(`  - First 3 timemap entries:`, player._options.converter.timemap.slice(0, 3));
-      console.log(`  - Synthesizer:`, player._synthesizer);
-      console.log(`  - Sequencer:`, player._sequencer);
-      if (player._synthesizer) {
-        console.log(`  - Synth voicesAmount:`, player._synthesizer.voicesAmount);
-        console.log(`  - Synth channels:`, player._synthesizer.midiChannels?.length);
-      }
       
       const filename = player.title.toLowerCase().replace(/[/\\?%*:|"'<>\.,;\s]/g, '-') ?? 'untitled';
       const a1 = document.createElement('a');
@@ -262,8 +235,6 @@ async function createPlayer() {
       a2.setAttribute('download', `${filename}.mid`);
       a2.innerText = 'Download MIDI';
       document.getElementById('download-midi').appendChild(a2);
-      
-      console.log(`✓ Player ready - you can now click play`);
 
       // Save the state and player parameters.
       g_state.player = player;
@@ -329,49 +300,24 @@ async function createConverter(converter, sheet, groove, renderer) {
   // Check if we have a cached MIDI file for uploaded content
   // This applies to uploaded files (not starting with http or data/)
   if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
-    console.log(`Checking cache for: ${baseName}, converter type: ${converter}`);
     const cached = await retrieveMidiFile(baseName);
     if (cached) {
-      console.log(`✓ Using cached MIDI for: ${sheet}`);
-      console.log(`  MIDI type: ${cached.midi.constructor.name}, size: ${cached.midi.byteLength} bytes`);
-      if (cached.timemap) {
-        console.log(`  Timemap entries: ${cached.timemap.length}`);
-        console.log(`  First timemap entry:`, cached.timemap[0]);
-      } else {
-        console.log(`  No timemap (timing will be calculated from score)`);
-      }
-      
       // Ensure MIDI is an ArrayBuffer
       const midiBuffer = cached.midi instanceof ArrayBuffer ? cached.midi : cached.midi.buffer;
-      
-      // Debug: Check first few bytes of MIDI (should start with "MThd")
-      const view = new Uint8Array(midiBuffer);
-      const header = String.fromCharCode(view[0], view[1], view[2], view[3]);
-      console.log(`  MIDI header: "${header}" (should be "MThd")`);
-      
       const fetchConverter = new FetchConverter(midiBuffer, cached.timemap);
-      console.log('✓ Created FetchConverter with cached data');
       return fetchConverter;
-    } else {
-      console.log(`No cached MIDI found for: ${baseName}, will use converter: ${converter}`);
     }
   }
   
-  console.log(`Creating converter type: ${converter} for sheet: ${sheet}`);
   switch (converter) {
     case 'midi':
       const midi = base.replace(/\.\w+$/, '.mid');
-      console.log(`📁 Loading pre-existing MIDI file: ${midi}`);
       try {
         const timemap = base.replace(/\.\w+$/, '.timemap.json');
         await fetish(timemap, { method: 'HEAD' });
-        console.log(`📁 Loading timemap file: ${timemap}`);
-        console.log(`✓ Using pre-existing MIDI + timemap (not generating)`);
         return new FetchConverter(midi, timemap);
       }
       catch {
-        console.log(`⚠️ No timemap file found for ${midi}`);
-        console.log(`  Timemap will be generated from MusicXML`);
         return new FetchConverter(midi);
       }
     case 'vrv':
@@ -474,9 +420,6 @@ async function handleIRealChange(e) {
     // Fetch the file using the generic helper (handles CORS automatically)
     const buffer = await fetchExternalUrl(url);
     
-    console.log('[handleIRealChange] Received buffer, size:', buffer.byteLength);
-    console.log('[handleIRealChange] First 50 bytes:', new Uint8Array(buffer.slice(0, 50)));
-    
     // Extract filename for display and caching
     // For Google Drive/Dropbox/OneDrive URLs, use a generic name
     let filename;
@@ -488,8 +431,6 @@ async function handleIRealChange(e) {
     } else {
       filename = url.split('/').pop().split('?')[0] || 'remote-file.musicxml';
     }
-    
-    console.log('[handleIRealChange] Using filename:', filename);
     
     // Store the original URL before calling handleFileBuffer
     const originalUrl = e.target.value;
@@ -513,9 +454,7 @@ async function handleIRealChange(e) {
 
 async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
   try {
-    console.log('[handleFileBuffer] Starting to parse MusicXML, filename:', filename);
     const parseResult = await parseMusicXml(buffer, new SaxonJSProcessor());
-    console.log('[handleFileBuffer] Successfully parsed MusicXML');
     g_state.musicXml = parseResult.musicXml;
     g_state.params.set('sheet', filename);
     
@@ -738,15 +677,6 @@ async function retrieveMidiFile(baseName) {
       
       getRequest.onsuccess = () => {
         const result = getRequest.result;
-        if (result) {
-          console.log(`Retrieved cached MIDI for: ${baseName}`);
-          console.log(`  MIDI size: ${result.midi.byteLength} bytes`);
-          if (result.timemap) {
-            console.log(`  Timemap entries: ${result.timemap.length}`);
-          } else {
-            console.log(`  No timemap (will calculate timing from score)`);
-          }
-        }
         db.close();
         resolve(result || null);
       };
@@ -919,7 +849,6 @@ async function populateSamplesList() {
         samplesSelect.add(option);
       } catch (error) {
         // File doesn't exist, skip it
-        console.log(`File not found: data/${file}`);
       }
     }
   } catch (error) {
@@ -936,9 +865,6 @@ async function loadSongFromUrl(url) {
   try {
     // Fetch the file using the generic helper (handles CORS automatically)
     const buffer = await fetchExternalUrl(url);
-    
-    console.log('[loadSongFromUrl] Received buffer, size:', buffer.byteLength);
-    console.log('[loadSongFromUrl] First 50 bytes:', new Uint8Array(buffer.slice(0, 50)));
     
     // Extract filename for display and caching
     // For Google Drive/Dropbox/OneDrive URLs, use a generic name
