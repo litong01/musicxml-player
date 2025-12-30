@@ -20,6 +20,7 @@ import {
   Converter,
   Version
 } from 'https://cdn.jsdelivr.net/npm/@music-i18n/ireal-musicxml@latest/+esm';
+import { authManager } from './auth.mjs';
 
 const DEFAULT_RENDERER = 'osmd';
 const DEFAULT_OUTPUT = 'local';
@@ -372,6 +373,20 @@ async function handleSampleSelect(e) {
     option = document.querySelector(`#samples option[value="${sheet}"]`);
   }
   
+  // If still no option (e.g., non-authenticated user with empty samples list),
+  // just load the sheet directly without trying to read data attributes
+  if (!option) {
+    g_state.params.set('sheet', sheet);
+    g_state.params.set('renderer', DEFAULT_RENDERER);
+    g_state.params.set('converter', DEFAULT_CONVERTER);
+    
+    // Load directly
+    const buffer = await (await fetish(sheet)).arrayBuffer();
+    const filename = sheet.split('/').pop();
+    await handleFileBuffer(filename, buffer);
+    return;
+  }
+  
   // Clear playlist state when manually selecting a sample
   clearPlaylistState();
   
@@ -412,6 +427,12 @@ async function handleSampleSelect(e) {
 async function handleIRealChange(e) {
   let url = e.target.value.trim();
   if (!url) return;
+  
+  // Check if user has permission to load external URLs (premium feature)
+  if (!checkFeatureAccess('external-urls')) {
+    e.target.value = '';
+    return;
+  }
   
   // Clear playlist state when manually entering a URL
   clearPlaylistState();
@@ -1221,39 +1242,168 @@ function savePlaylist() {
   hidePlaylistForm();
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  // Load the parameters from local storage and/or the URL.
-  const params = new URLSearchParams(document.location.search);
+// ========== Authentication Functions ==========
+
+/**
+ * Initialize authentication system
+ */
+async function initializeAuth() {
   try {
-    const stored = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEY));
-    g_state.params = new URLSearchParams([...stored.params]);
-    // Use hardcoded options for rendering, only restore mute and respectLineBreaks from storage
-    g_state.options = {
-      unroll: false,
-      horizontal: false,
-      follow: true,
-      mute: stored.options?.mute || false,
-      respectLineBreaks: stored.options?.respectLineBreaks || false,
-    };
+    await authManager.initialize();
+    updateAuthUI();
+    
+    // Set up event listeners
+    document.getElementById('login-btn').addEventListener('click', () => {
+      authManager.login();
+    });
+    
+    document.getElementById('register-btn').addEventListener('click', () => {
+      authManager.register();
+    });
+    
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      await authManager.logout();
+      updateAuthUI();
+    });
+  } catch (error) {
+    console.error('Auth initialization failed:', error);
   }
-  catch {
+}
+
+/**
+ * Update UI based on authentication status
+ */
+function updateAuthUI() {
+  const isAuth = authManager.isUserAuthenticated();
+  const user = authManager.getUser();
+  const tier = authManager.getSubscriptionTier();
+  
+  // UI elements
+  const loginBtn = document.getElementById('login-btn');
+  const registerBtn = document.getElementById('register-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const userInfo = document.getElementById('user-info');
+  const userName = document.getElementById('user-name');
+  const userAvatar = document.getElementById('user-avatar');
+  const subscriptionBadge = document.getElementById('subscription-badge');
+  const settingsBtn = document.getElementById('settings-btn');
+  
+  // If auth is not enabled, hide all auth UI
+  if (!authManager.authEnabled) {
+    loginBtn.style.display = 'none';
+    registerBtn.style.display = 'none';
+    logoutBtn.style.display = 'none';
+    userInfo.classList.remove('show');
+    return;
+  }
+  
+  if (isAuth && user) {
+    // Show user info
+    userInfo.classList.add('show');
+    userName.textContent = user.given_name || user.email || 'User';
+    userAvatar.textContent = (user.given_name?.[0] || user.email?.[0] || 'U').toUpperCase();
+    
+    // Update subscription badge
+    subscriptionBadge.className = '';
+    subscriptionBadge.classList.add(tier);
+    subscriptionBadge.textContent = tier;
+    
+    // Show logout button and settings
+    logoutBtn.style.display = 'inline-block';
+    loginBtn.style.display = 'none';
+    registerBtn.style.display = 'none';
+    settingsBtn.style.display = 'flex';
+  } else {
+    // Show login/register buttons, hide settings
+    userInfo.classList.remove('show');
+    loginBtn.style.display = 'inline-block';
+    registerBtn.style.display = 'inline-block';
+    logoutBtn.style.display = 'none';
+    settingsBtn.style.display = 'none';
+  }
+}
+
+/**
+ * Check if user can access a feature and show appropriate message
+ * @param {string} feature - Feature name
+ * @returns {boolean} - Whether access is granted
+ */
+function checkFeatureAccess(feature) {
+  const access = authManager.canAccessFeature(feature);
+  
+  if (!access.allowed) {
+    const errorElement = document.getElementById('error');
+    errorElement.textContent = access.reason;
+    errorElement.style.color = '#d32f2f';
+    
+    // Clear error after 5 seconds
+    setTimeout(() => {
+      errorElement.textContent = '';
+    }, 5000);
+    
+    return false;
+  }
+  
+  return true;
+}
+
+// ========== Main Application ==========
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize authentication
+  await initializeAuth();
+  
+  // Check if user is authenticated (when auth is enabled)
+  const isAuthenticated = !authManager.authEnabled || authManager.isUserAuthenticated();
+  
+  // Get URL parameters first
+  const params = new URLSearchParams(document.location.search);
+  
+  // For non-authenticated users, force default music and hide settings
+  if (!isAuthenticated) {
+    // Force default sheet only
     g_state.params = new URLSearchParams();
+    g_state.params.set('sheet', DEFAULT_SHEET);
+    g_state.params.set('renderer', DEFAULT_RENDERER);
+    g_state.params.set('converter', DEFAULT_CONVERTER);
+    g_state.params.set('output', DEFAULT_OUTPUT);
     g_state.options = DEFAULT_OPTIONS;
+  } else {
+    // Authenticated users: Load from storage/URL
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEY));
+      g_state.params = new URLSearchParams([...stored.params]);
+      // Use hardcoded options for rendering, only restore mute and respectLineBreaks from storage
+      g_state.options = {
+        unroll: false,
+        horizontal: false,
+        follow: true,
+        mute: stored.options?.mute || false,
+        respectLineBreaks: stored.options?.respectLineBreaks || false,
+      };
+    }
+    catch {
+      g_state.params = new URLSearchParams();
+      g_state.options = DEFAULT_OPTIONS;
+    }
+    // URL params override everything for authenticated users
+    params.entries().forEach(([key, value]) => { g_state.params.set(key, value); });
   }
-  // URL params override everything
-  params.entries().forEach(([key, value]) => { g_state.params.set(key, value); });
+  
   g_state.params.set('output', DEFAULT_OUTPUT); // Too complicated to wait for MIDI output
-  // Always ensure renderer uses the current default if not specified in URL
+  // Always ensure renderer uses the current default if not specified
   if (!params.has('renderer')) {
     g_state.params.set('renderer', DEFAULT_RENDERER);
   }
   window.g_state = g_state;
 
-  // Populate the samples list dynamically
-  await populateSamplesList();
-
-  // Populate the playlist dropdown
-  populatePlaylistDropdown();
+  // Only populate samples and playlists for authenticated users
+  if (isAuthenticated) {
+    // Populate the samples list dynamically
+    await populateSamplesList();
+    // Populate the playlist dropdown
+    populatePlaylistDropdown();
+  }
 
   // Build the UI.
   const rendererValue = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
