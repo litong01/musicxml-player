@@ -1,6 +1,4 @@
 import './player.css';
-export * from './AccompanimentConverter';
-export * from './AccompanimentEngine';
 export * from './FetchConverter';
 export * from './MmaConverter';
 export * from './MuseScoreConverter';

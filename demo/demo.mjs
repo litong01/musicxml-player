@@ -8,7 +8,6 @@ import {
   VerovioRenderer,
   VerovioStaticRenderer,
   OpenSheetMusicDisplayRenderer,
-  generateBandMidiFromMusicXML,
   MmaConverter,
   FetchConverter,
   parseMusicXml,
@@ -186,10 +185,12 @@ async function createPlayer() {
   const baseName = base
     .replace(/\.(musicxml|mxl|xml)$/i, '')
     .replace(/^data\//, '');
-  
+
   // Skip cached MIDI when using band accompaniment mode (needs fresh generation)
-  const shouldUseBandMode = g_state.accompanimentMode === 'band-only' || g_state.accompanimentMode === 'solo-and-band';
-  
+  const shouldUseBandMode =
+    g_state.accompanimentMode === 'band-only' ||
+    g_state.accompanimentMode === 'solo-and-band';
+
   if (baseName !== 'remote-file' && !shouldUseBandMode) {
     try {
       const midiPath = base.replace(/\.\w+$/, '.mid');
@@ -333,13 +334,19 @@ async function createConverter(converter, sheet, groove, renderer) {
   if (baseName.startsWith('data/')) {
     baseName = baseName.replace(/^data\//, '');
   }
-  
+
   // Skip cached MIDI when using band accompaniment mode (needs fresh generation)
-  const shouldUseBandMode = g_state.accompanimentMode === 'band-only' || g_state.accompanimentMode === 'solo-and-band';
-  
+  const shouldUseBandMode =
+    g_state.accompanimentMode === 'band-only' ||
+    g_state.accompanimentMode === 'solo-and-band';
+
   // Check if we have a cached MIDI file for uploaded content
   // This applies to uploaded files (not starting with http or data/)
-  if (!sheet.startsWith('http') && !sheet.startsWith('data/') && !shouldUseBandMode) {
+  if (
+    !sheet.startsWith('http') &&
+    !sheet.startsWith('data/') &&
+    !shouldUseBandMode
+  ) {
     const cached = await retrieveMidiFile(baseName);
     if (cached) {
       // Ensure MIDI is an ArrayBuffer
@@ -361,48 +368,8 @@ async function createConverter(converter, sheet, groove, renderer) {
         return new FetchConverter(midi);
       }
     case 'vrv':
-      // NOTE: AccompanimentEngine has a known infinite loop issue and is currently disabled
-      // When enabled, generateBandMidiFromMusicXML() hangs the browser
-      // TODO: Debug and fix the infinite loop in AccompanimentEngine before re-enabling
-      const useAccompaniment = false;
-      
-      // Check if we need to use AccompanimentEngine
-      if (useAccompaniment && (g_state.accompanimentMode === 'band-only' || g_state.accompanimentMode === 'solo-and-band')) {
-        // Use AccompanimentEngine to generate band MIDI
-        return {
-          _midi: null,
-          _timemap: [],
-          async initialize(xml, options) {
-            try {
-              const midiObj = await generateBandMidiFromMusicXML(xml, {
-                outputMode: g_state.accompanimentMode,
-                bandEnergy: 'medium',
-                drummerPracticeMode: true,
-              });
-              
-              // Convert Midi object to ArrayBuffer
-              const midiArray = midiObj.toArray();
-              this._midi = midiArray.buffer;
-              // AccompanimentEngine doesn't provide timemap, use empty array
-              this._timemap = [];
-            } catch (error) {
-              console.error('Error generating band accompaniment:', error);
-              throw error;
-            }
-          },
-          get midi() {
-            return this._midi;
-          },
-          get timemap() {
-            return this._timemap;
-          }
-        };
-      } else {
-        // Use standard Verovio converter for solo-only
-        return new VerovioConverter({
-          tuning: g_state.tuning,
-        });
-      }
+      // Use VerovioConverter for all accompaniment modes
+      return new VerovioConverter(g_state.vrvOptions);
     case 'mma':
       const parameters = {};
       if (groove !== DEFAULT_GROOVE) {
@@ -442,13 +409,13 @@ function handleSettingsOpen() {
   const currentRenderer = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
   const currentSheet = g_state.params.get('sheet') ?? DEFAULT_SHEET;
   const currentSource = determineCurrentMusicSource();
-  
+
   // Determine the sample value - should be the sheet name for samples
   let sampleValue = '';
   if (currentSource === 'samples') {
     sampleValue = currentSheet;
   }
-  
+
   g_state.pendingSettings = {
     musicSource: currentSource,
     sampleValue: sampleValue,
@@ -459,33 +426,37 @@ function handleSettingsOpen() {
     accompanimentMode: g_state.accompanimentMode,
     options: { ...g_state.options },
   };
-  
+
   // Set the appropriate radio button
   const sourceRadios = document.querySelectorAll('input[name="music-source"]');
-  sourceRadios.forEach(radio => {
+  sourceRadios.forEach((radio) => {
     if (radio.value === currentSource) {
       radio.checked = true;
     }
   });
-  
+
   // Set the actual input values
   if (currentSource === 'samples') {
     const samplesDropdown = document.getElementById('samples');
-    
+
     // The dropdown options include 'data/' prefix, so add it if not present
     let dropdownValue = currentSheet;
-    if (!dropdownValue.startsWith('data/') && !dropdownValue.startsWith('http')) {
+    if (
+      !dropdownValue.startsWith('data/') &&
+      !dropdownValue.startsWith('http')
+    ) {
       dropdownValue = 'data/' + dropdownValue;
     }
-    
+
     samplesDropdown.value = dropdownValue;
-    
+
     // Update pendingSettings to use the full path with data/ prefix
     g_state.pendingSettings.sampleValue = dropdownValue;
   } else if (currentSource === 'url') {
     document.getElementById('ireal').value = currentSheet;
   } else if (currentSource === 'playlist') {
-    document.getElementById('active-playlist').value = g_state.currentPlaylistId || '';
+    document.getElementById('active-playlist').value =
+      g_state.currentPlaylistId || '';
   }
 }
 
@@ -494,7 +465,7 @@ function determineCurrentMusicSource() {
   if (g_state.currentMusicSource) {
     return g_state.currentMusicSource;
   }
-  
+
   // Fallback to heuristics
   if (g_state.currentPlaylistId) return 'playlist';
   const sheet = g_state.params.get('sheet') ?? DEFAULT_SHEET;
@@ -505,24 +476,24 @@ function determineCurrentMusicSource() {
 
 async function handleApplySettings() {
   if (!g_state.pendingSettings) return;
-  
+
   const settings = g_state.pendingSettings;
-  
+
   // Apply renderer
   if (settings.renderer !== g_state.params.get('renderer')) {
     g_state.params.set('renderer', settings.renderer);
   }
-  
+
   // Apply accompaniment mode
   if (settings.accompanimentMode !== g_state.accompanimentMode) {
     g_state.accompanimentMode = settings.accompanimentMode;
     savePlayerOptions();
   }
-  
+
   // Apply options
   g_state.options = { ...settings.options };
   savePlayerOptions();
-  
+
   // Apply velocity and repeat if they were changed
   if (settings.velocity !== undefined) {
     g_state.params.set('velocity', settings.velocity);
@@ -530,16 +501,16 @@ async function handleApplySettings() {
   if (settings.repeat !== undefined) {
     g_state.params.set('repeat', settings.repeat);
   }
-  
+
   // Apply music source change if different
   const needsReload = await applyMusicSourceChange(settings);
-  
+
   // Clear pending settings
   g_state.pendingSettings = null;
-  
+
   // Close the modal
   document.getElementById('settings-modal').classList.remove('show');
-  
+
   // If we changed source or settings that require reload, create new player
   if (needsReload) {
     createPlayer();
@@ -549,20 +520,22 @@ async function handleApplySettings() {
 async function applyMusicSourceChange(settings) {
   const currentSource = determineCurrentMusicSource();
   const currentSheet = g_state.params.get('sheet') ?? DEFAULT_SHEET;
-  
+
   // Check if source changed
   const sourceChanged = settings.musicSource !== currentSource;
-  
+
   // Check if value changed within the same source type
   let valueChanged = false;
   if (settings.musicSource === 'samples') {
-    valueChanged = settings.sampleValue && settings.sampleValue !== currentSheet;
+    valueChanged =
+      settings.sampleValue && settings.sampleValue !== currentSheet;
   } else if (settings.musicSource === 'url') {
     valueChanged = settings.urlValue && settings.urlValue !== currentSheet;
   } else if (settings.musicSource === 'playlist') {
-    valueChanged = settings.playlistId && settings.playlistId !== g_state.currentPlaylistId;
+    valueChanged =
+      settings.playlistId && settings.playlistId !== g_state.currentPlaylistId;
   }
-  
+
   // If source changed OR value changed, load the new music
   if (sourceChanged || valueChanged) {
     switch (settings.musicSource) {
@@ -591,18 +564,21 @@ async function applyMusicSourceChange(settings) {
         break;
       case 'playlist':
         if (settings.playlistId) {
-          document.getElementById('active-playlist').value = settings.playlistId;
+          document.getElementById('active-playlist').value =
+            settings.playlistId;
           // Clear pendingSettings temporarily
           const savedPending = g_state.pendingSettings;
           g_state.pendingSettings = null;
-          await handlePlaylistChange({ target: { value: settings.playlistId } });
+          await handlePlaylistChange({
+            target: { value: settings.playlistId },
+          });
           g_state.pendingSettings = savedPending;
           return false; // Don't call createPlayer, handlePlaylistChange already did
         }
         break;
     }
   }
-  
+
   // Settings changed but not music source - need reload for renderer/accompaniment
   return true;
 }
@@ -614,20 +590,19 @@ function handleCancelSettings() {
 
 async function handlePlaylistChange(e) {
   const playlistId = e.target.value;
-  
+
   // When called from settings modal, just store the playlist selection
   if (g_state.pendingSettings) {
     g_state.pendingSettings.musicSource = 'playlist';
     g_state.pendingSettings.playlistId = playlistId;
     return;
   }
-  
+
   // Mark this as a playlist source
   g_state.currentMusicSource = 'playlist';
-  
+
   // Otherwise, apply immediately
   if (playlistId) {
-
     // Load the playlist
     const playlists = loadPlaylists();
     const playlist = playlists.find((p) => p.id === playlistId);
@@ -686,7 +661,7 @@ async function handleSampleSelect(e) {
 
   // Clear playlist state when manually selecting a sample
   clearPlaylistState();
-  
+
   // Mark this as a sample source
   g_state.currentMusicSource = 'samples';
 
@@ -749,7 +724,7 @@ async function handleSampleSelect(e) {
 async function handleIRealChange(e) {
   let url = e.target.value.trim();
   if (!url) return;
-  
+
   // When called from settings modal, just store the URL
   if (g_state.pendingSettings) {
     g_state.pendingSettings.musicSource = 'url';
@@ -765,7 +740,7 @@ async function handleIRealChange(e) {
 
   // Clear playlist state when manually entering a URL
   clearPlaylistState();
-  
+
   // Mark this as a URL source
   g_state.currentMusicSource = 'url';
 
@@ -1052,7 +1027,7 @@ async function handleFileUpload(e) {
 
   // Clear playlist state when uploading files
   clearPlaylistState();
-  
+
   // Mark this as an upload source
   g_state.currentMusicSource = 'upload';
 
@@ -1143,13 +1118,13 @@ function handleOptionChange(e) {
     follow: true, // Always checked
     respectLineBreaks: !!document.getElementById('respect-line-breaks').checked,
   };
-  
+
   // If in settings modal, update pending settings
   if (g_state.pendingSettings) {
     g_state.pendingSettings.options = newOptions;
     return;
   }
-  
+
   // Otherwise apply immediately
   g_state.options = newOptions;
   if (e.target.id === 'option-mute') {
@@ -1168,7 +1143,7 @@ function handleVelocityChange(e) {
     g_state.pendingSettings.velocity = e.target.value;
     return;
   }
-  
+
   g_state.params.set('velocity', e.target.value);
   if (g_state.player) {
     g_state.player.velocity = Number(e.target.value);
@@ -1182,7 +1157,7 @@ function handleRepeatChange(e) {
     g_state.pendingSettings.repeat = e.target.value;
     return;
   }
-  
+
   g_state.params.set('repeat', e.target.value);
   if (g_state.player) {
     g_state.player.repeat =
@@ -1874,32 +1849,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   document
     .getElementById('upload')
     .addEventListener('change', handleFileUpload);
-  document
-    .getElementById('samples')
-    .addEventListener('change', (e) => {
-      // Update pending settings when sample changes
-      if (g_state.pendingSettings) {
-        g_state.pendingSettings.sampleValue = e.target.value;
-        g_state.pendingSettings.musicSource = 'samples';
-        // Auto-select the samples radio button
-        document.getElementById('source-samples').checked = true;
-      } else {
-        handleSampleSelect(e);
-      }
-    });
-  document
-    .getElementById('ireal')
-    .addEventListener('change', (e) => {
-      // Update pending settings when URL changes
-      if (g_state.pendingSettings) {
-        g_state.pendingSettings.urlValue = e.target.value;
-        g_state.pendingSettings.musicSource = 'url';
-        // Auto-select the URL radio button
-        document.getElementById('source-url').checked = true;
-      } else {
-        handleIRealChange(e);
-      }
-    });
+  document.getElementById('samples').addEventListener('change', (e) => {
+    // Update pending settings when sample changes
+    if (g_state.pendingSettings) {
+      g_state.pendingSettings.sampleValue = e.target.value;
+      g_state.pendingSettings.musicSource = 'samples';
+      // Auto-select the samples radio button
+      document.getElementById('source-samples').checked = true;
+    } else {
+      handleSampleSelect(e);
+    }
+  });
+  document.getElementById('ireal').addEventListener('change', (e) => {
+    // Update pending settings when URL changes
+    if (g_state.pendingSettings) {
+      g_state.pendingSettings.urlValue = e.target.value;
+      g_state.pendingSettings.musicSource = 'url';
+      // Auto-select the URL radio button
+      document.getElementById('source-url').checked = true;
+    } else {
+      handleIRealChange(e);
+    }
+  });
   document
     .getElementById('velocity')
     .addEventListener('change', handleVelocityChange);
@@ -1908,19 +1879,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     .addEventListener('change', handleRepeatChange);
 
   // Playlist selection
-  document
-    .getElementById('active-playlist')
-    .addEventListener('change', (e) => {
-      // Update pending settings when playlist changes
-      if (g_state.pendingSettings) {
-        g_state.pendingSettings.playlistId = e.target.value;
-        g_state.pendingSettings.musicSource = 'playlist';
-        // Auto-select the playlist radio button
-        document.getElementById('source-playlist').checked = true;
-      } else {
-        handlePlaylistChange(e);
-      }
-    });
+  document.getElementById('active-playlist').addEventListener('change', (e) => {
+    // Update pending settings when playlist changes
+    if (g_state.pendingSettings) {
+      g_state.pendingSettings.playlistId = e.target.value;
+      g_state.pendingSettings.musicSource = 'playlist';
+      // Auto-select the playlist radio button
+      document.getElementById('source-playlist').checked = true;
+    } else {
+      handlePlaylistChange(e);
+    }
+  });
 
   document.querySelectorAll('.option').forEach((element) => {
     if (!!g_state.options[element.id.replace('option-', '')]) {
@@ -1946,11 +1915,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     handleSettingsOpen();
     settingsModal.classList.add('show');
   });
-  
+
   applySettings.addEventListener('click', () => {
     handleApplySettings();
   });
-  
+
   cancelSettings.addEventListener('click', () => {
     handleCancelSettings();
   });
@@ -1961,7 +1930,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       handleCancelSettings();
     }
   });
-  
+
   // Music source radio buttons
   document.querySelectorAll('input[name="music-source"]').forEach((radio) => {
     radio.addEventListener('change', handleMusicSourceChange);
