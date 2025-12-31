@@ -364,14 +364,14 @@
         </div>
 
         <div class="settings-section">
-          <div style="font-weight: bold; margin-bottom: 15px;">Select Music Source</div>
+          <div style="font-weight: bold; margin-bottom: 15px;">Select music source</div>
           
           <div style="margin-left: 20px;">
             <div style="margin-bottom: 15px;">
               <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
                 <input type="radio" name="music-source" value="samples" id="source-samples" style="margin-top: 4px;"/>
                 <div style="flex: 1;">
-                  <div style="font-weight: bold; font-size: 0.9em; margin-bottom: 5px;">Choose from sample library</div>
+                  <div style="font-weight: bold; font-size: 0.9em; margin-bottom: 5px;">Choose from library</div>
                   <select id="samples" style="width: 100%;">
                     <option value="">-- Loading... --</option>
                   </select>
@@ -383,7 +383,7 @@
               <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
                 <input type="radio" name="music-source" value="upload" id="source-upload" style="margin-top: 4px;"/>
                 <div style="flex: 1;">
-                  <div style="font-weight: bold; font-size: 0.9em; margin-bottom: 5px;">Upload MusicXML file</div>
+                  <div style="font-weight: bold; font-size: 0.9em; margin-bottom: 5px;">Upload music XML file</div>
                   <input type="file" id="upload" name="upload" multiple style="width: 100%;"/>
                   <small>Supports .mxl, .musicxml, or .mid files</small>
                 </div>
@@ -432,7 +432,7 @@
               </label>
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 20px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
             <label for="respect-line-breaks" style="display: flex; align-items: center; gap: 5px; margin: 0; cursor: pointer;">
               <span style="font-weight: bold;">Use line breaks</span>
               <input type="checkbox" id="respect-line-breaks" name="respect-line-breaks"/>
@@ -445,7 +445,7 @@
         </div>
 
         <div class="settings-section">
-          <div style="font-weight: bold; margin-bottom: 10px;">Band Accompaniment</div>
+          <div style="font-weight: bold; margin-bottom: 10px;">Band accompaniment</div>
           <div style="display: flex; gap: 15px; margin-left: 20px;">
             <label for="accompaniment-solo" style="display: flex; align-items: center; gap: 5px; font-weight: normal; cursor: pointer;">
               <input type="radio" id="accompaniment-solo" name="accompaniment" value="solo-only" checked/>

@@ -1879,9 +1879,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     await playNextSong();
   });
 
-  document
-    .getElementById('upload')
-    .addEventListener('change', handleFileUpload);
+  document.getElementById('upload').addEventListener('change', (e) => {
+    // Auto-select the upload radio button when file is selected
+    if (e.target.files.length > 0) {
+      if (g_state.pendingSettings) {
+        g_state.pendingSettings.musicSource = 'upload';
+      }
+      document.getElementById('source-upload').checked = true;
+    }
+    handleFileUpload(e);
+  });
   document.getElementById('samples').addEventListener('change', (e) => {
     // Update pending settings when sample changes
     if (g_state.pendingSettings) {
@@ -1902,6 +1909,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('source-url').checked = true;
     } else {
       handleIRealChange(e);
+    }
+  });
+  // Also auto-select URL radio on input (typing/pasting)
+  document.getElementById('ireal').addEventListener('input', (e) => {
+    if (e.target.value.trim()) {
+      if (g_state.pendingSettings) {
+        g_state.pendingSettings.urlValue = e.target.value;
+        g_state.pendingSettings.musicSource = 'url';
+      }
+      document.getElementById('source-url').checked = true;
     }
   });
   document
