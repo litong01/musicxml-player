@@ -46,7 +46,7 @@ export class FetchConverter implements IMIDIConverter {
         : typeof this._timemapOrUri === 'string'
           ? <MeasureTimemap>await (await fetish(this._timemapOrUri)).json()
           : this._timemapOrUri;
-    
+
     // Fallback: If XSL transformation failed, use Verovio to generate timemap
     if (this._timemap.length === 0) {
       this._timemap = await this._generateTimemapWithVerovio(musicXml);
@@ -62,21 +62,24 @@ export class FetchConverter implements IMIDIConverter {
     try {
       const VerovioModule = await createVerovioModule();
       const vrv = <VerovioToolkitFixed>new VerovioToolkit(VerovioModule);
-      
+
       if (!vrv.loadData(musicXml)) {
         return [];
       }
-      
+
       const vrvTimemap = vrv.renderToTimemap({
         includeMeasures: true,
         includeRests: true,
       });
       const timemap = VerovioConverterBase.parseTimemap(vrvTimemap);
       vrv.destroy();
-      
+
       return timemap;
     } catch (error) {
-      console.error('[FetchConverter] Verovio timemap generation failed:', error);
+      console.error(
+        '[FetchConverter] Verovio timemap generation failed:',
+        error,
+      );
       return [];
     }
   }

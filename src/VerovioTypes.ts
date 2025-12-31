@@ -1,5 +1,8 @@
-import { VerovioOptions, TimeMapEntry } from 'verovio';
-import { VerovioToolkit } from 'verovio/esm';
+import {
+  VerovioOptions,
+  TimeMapEntry,
+  toolkit as VerovioToolkit,
+} from 'verovio';
 
 export interface TimeMapEntryFixed extends TimeMapEntry {
   restsOn?: string[];

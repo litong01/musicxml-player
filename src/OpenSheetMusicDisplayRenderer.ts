@@ -58,13 +58,13 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
       const beatsPerMeasure = measure.Duration.RealValue * 4; // Convert to quarter note units
       const millisecsPerBeat = 60000 / measure.TempoInBPM;
       const measureDuration = beatsPerMeasure * millisecsPerBeat;
-      
+
       timemap.push({
         measure: index,
         timestamp: cumulativeTime,
         duration: measureDuration,
       });
-      
+
       cumulativeTime += measureDuration;
     });
 
@@ -116,10 +116,10 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
       this._osmd.EngravingRules.ChordSymbolLabelTexts,
     );
     await this._osmd.load(musicXml);
-    
+
     // Store the converter's timemap for accurate cursor positioning
     this._timemap = options.converter.timemap;
-    
+
     this._redraw();
   }
 
@@ -140,10 +140,10 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     if (!timemapEntry) {
       return;
     }
-    
+
     const measureDuration = timemapEntry.duration;
     const measureMusicalDuration = measure.Duration.RealValue;
-    
+
     if (measureMusicalDuration <= 0) {
       return;
     }
@@ -156,7 +156,7 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
       v--
     ) {
       const vsse = measure.VerticalSourceStaffEntryContainers[v]!;
-      
+
       // Convert OSMD's musical time (whole note units) to milliseconds
       const vsseTimeRatio = vsse.Timestamp.RealValue / measureMusicalDuration;
       const vsseTime = vsseTimeRatio * measureDuration;
@@ -216,14 +216,11 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
               const measureDuration = timemapEntry?.duration ?? 1000;
               const sourceMeasure = measure.parentSourceMeasure;
               const measureMusicalDuration = sourceMeasure.Duration.RealValue;
-              const relativeOffsetRatio = se.relInMeasureTimestamp.RealValue / measureMusicalDuration;
+              const relativeOffsetRatio =
+                se.relInMeasureTimestamp.RealValue / measureMusicalDuration;
               const relativeOffset = relativeOffsetRatio * measureDuration;
-              
-              this.player?.moveTo(
-                index,
-                measureStart,
-                relativeOffset,
-              );
+
+              this.player?.moveTo(index, measureStart, relativeOffset);
             });
           });
         });

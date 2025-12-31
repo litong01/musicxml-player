@@ -1,10 +1,13 @@
 import './player.css';
+export * from './AccompanimentConverter';
+export * from './AccompanimentEngine';
 export * from './FetchConverter';
 export * from './MmaConverter';
 export * from './MuseScoreConverter';
 export * from './MuseScoreRenderer';
 export * from './OpenSheetMusicDisplayRenderer';
 export * from './Player';
+export * from './SaxonJSProcessor';
 export * from './VerovioConverter';
 export * from './VerovioRenderer';
 export * from './VerovioStaticConverter';

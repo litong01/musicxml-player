@@ -11,7 +11,7 @@ const GM_PERCUSSION_MAP: Record<string, number> = {
   'bass drum 1': 36,
   'bass drum 2': 35,
   'bass drum': 36,
-  
+
   // Snare drums
   'side stick': 37,
   'acoustic snare': 38,
@@ -19,7 +19,7 @@ const GM_PERCUSSION_MAP: Record<string, number> = {
   'electric snare': 40,
   'snare drum': 38,
   'snare': 38,
-  
+
   // Toms
   'low floor tom': 41,
   'closed hi-hat': 42,
@@ -62,7 +62,7 @@ const GM_PERCUSSION_MAP: Record<string, number> = {
   'open cuica': 79,
   'mute triangle': 80,
   'open triangle': 81,
-  
+
   // Common variations
   'hi-hat': 42,
   'hihat': 42,
@@ -84,7 +84,13 @@ const GM_PERCUSSION_MAP: Record<string, number> = {
  */
 function displayToMidiNote(step: string, octave: number): number {
   const stepOffsets: Record<string, number> = {
-    'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11
+    C: 0,
+    D: 2,
+    E: 4,
+    F: 5,
+    G: 7,
+    A: 9,
+    B: 11,
   };
   return (octave + 1) * 12 + stepOffsets[step];
 }
@@ -96,19 +102,19 @@ function getPercussionMidiNote(
   instrumentId: string | null,
   scoreInstruments: Map<string, string>,
   displayStep?: string,
-  displayOctave?: number
+  displayOctave?: number,
 ): number {
   // Try to find instrument name from ID
   if (instrumentId) {
     const instrumentName = scoreInstruments.get(instrumentId);
     if (instrumentName) {
       const normalizedName = instrumentName.toLowerCase().trim();
-      
+
       // Try exact match first
       if (GM_PERCUSSION_MAP[normalizedName] !== undefined) {
         return GM_PERCUSSION_MAP[normalizedName];
       }
-      
+
       // Try partial match
       for (const [key, value] of Object.entries(GM_PERCUSSION_MAP)) {
         if (normalizedName.includes(key) || key.includes(normalizedName)) {
@@ -117,12 +123,12 @@ function getPercussionMidiNote(
       }
     }
   }
-  
+
   // Fallback to display position if available
   if (displayStep && displayOctave !== undefined) {
     return displayToMidiNote(displayStep, displayOctave);
   }
-  
+
   // Default to acoustic snare if all else fails
   return 38;
 }
@@ -135,55 +141,82 @@ function getPercussionMidiNote(
 export function convertUnpitchedToPitched(musicXml: string): string {
   // Parse score-instrument definitions to build instrument map
   const scoreInstruments = new Map<string, string>();
-  const instrumentRegex = /<score-instrument[^>]*id="([^"]*)"[^>]*>[\s\S]*?<instrument-name>([^<]*)<\/instrument-name>[\s\S]*?<\/score-instrument>/g;
-  
+  const instrumentRegex =
+    /<score-instrument[^>]*id="([^"]*)"[^>]*>[\s\S]*?<instrument-name>([^<]*)<\/instrument-name>[\s\S]*?<\/score-instrument>/g;
+
   let match;
   while ((match = instrumentRegex.exec(musicXml)) !== null) {
     scoreInstruments.set(match[1], match[2]);
   }
-  
+
   // Convert unpitched notes to pitched
   let result = musicXml;
-  
+
   // Match unpitched elements with optional instrument ID and display info
-  const unpitchedRegex = /<note[^>]*>([\s\S]*?)<unpitched>([\s\S]*?)<\/unpitched>([\s\S]*?)<\/note>/g;
-  
-  result = result.replace(unpitchedRegex, (noteMatch, _beforeUnpitched, unpitchedContent, _afterUnpitched) => {
-    // Extract instrument ID if present
-    const instrumentMatch = noteMatch.match(/<instrument[^>]*id="([^"]*)"/);
-    const instrumentId = instrumentMatch ? instrumentMatch[1] : null;
-    
-    // Extract display-step and display-octave
-    const stepMatch = unpitchedContent.match(/<display-step>([^<]*)<\/display-step>/);
-    const octaveMatch = unpitchedContent.match(/<display-octave>([^<]*)<\/display-octave>/);
-    
-    const displayStep = stepMatch ? stepMatch[1] : undefined;
-    const displayOctave = octaveMatch ? parseInt(octaveMatch[1]) : undefined;
-    
-    // Get MIDI note number
-    const midiNote = getPercussionMidiNote(instrumentId, scoreInstruments, displayStep, displayOctave);
-    
-    // Convert MIDI note to pitch (step, octave, alter)
-    const octave = Math.floor(midiNote / 12) - 1;
-    const noteInOctave = midiNote % 12;
-    const steps = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
-    const alters = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
-    
-    const step = steps[noteInOctave];
-    const alter = alters[noteInOctave];
-    
-    // Build pitch element with proper formatting
-    const indent = '        '; // Match the indentation of the original unpitched element
-    let pitchXml = `<pitch>\n${indent}  <step>${step}</step>`;
-    if (alter !== 0) {
-      pitchXml += `\n${indent}  <alter>${alter}</alter>`;
-    }
-    pitchXml += `\n${indent}  <octave>${octave}</octave>\n${indent}  </pitch>`;
-    
-    // Reconstruct note with pitch instead of unpitched
-    // Simply replace the unpitched element with the pitch element
-    return noteMatch.replace(/<unpitched>[\s\S]*?<\/unpitched>/, pitchXml);
-  });
-  
+  const unpitchedRegex =
+    /<note[^>]*>([\s\S]*?)<unpitched>([\s\S]*?)<\/unpitched>([\s\S]*?)<\/note>/g;
+
+  result = result.replace(
+    unpitchedRegex,
+    (noteMatch, _beforeUnpitched, unpitchedContent, _afterUnpitched) => {
+      // Extract instrument ID if present
+      const instrumentMatch = noteMatch.match(/<instrument[^>]*id="([^"]*)"/);
+      const instrumentId = instrumentMatch ? instrumentMatch[1] : null;
+
+      // Extract display-step and display-octave
+      const stepMatch = unpitchedContent.match(
+        /<display-step>([^<]*)<\/display-step>/,
+      );
+      const octaveMatch = unpitchedContent.match(
+        /<display-octave>([^<]*)<\/display-octave>/,
+      );
+
+      const displayStep = stepMatch ? stepMatch[1] : undefined;
+      const displayOctave = octaveMatch ? parseInt(octaveMatch[1]) : undefined;
+
+      // Get MIDI note number
+      const midiNote = getPercussionMidiNote(
+        instrumentId,
+        scoreInstruments,
+        displayStep,
+        displayOctave,
+      );
+
+      // Convert MIDI note to pitch (step, octave, alter)
+      const octave = Math.floor(midiNote / 12) - 1;
+      const noteInOctave = midiNote % 12;
+      const steps = [
+        'C',
+        'C',
+        'D',
+        'D',
+        'E',
+        'F',
+        'F',
+        'G',
+        'G',
+        'A',
+        'A',
+        'B',
+      ];
+      const alters = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+
+      const step = steps[noteInOctave];
+      const alter = alters[noteInOctave];
+
+      // Build pitch element with proper formatting
+      const indent = '        '; // Match the indentation of the original unpitched element
+      let pitchXml = `<pitch>\n${indent}  <step>${step}</step>`;
+      if (alter !== 0) {
+        pitchXml += `\n${indent}  <alter>${alter}</alter>`;
+      }
+      pitchXml += `\n${indent}  <octave>${octave}</octave>\n${indent}  </pitch>`;
+
+      // Reconstruct note with pitch instead of unpitched
+      // Simply replace the unpitched element with the pitch element
+      return noteMatch.replace(/<unpitched>[\s\S]*?<\/unpitched>/, pitchXml);
+    },
+  );
+
   return result;
 }

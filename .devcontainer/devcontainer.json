@@ -1,0 +1,45 @@
+{
+  "name": "MusicXML Player Development",
+  "dockerFile": "Dockerfile",
+  
+  // Configure VS Code settings and extensions for the container
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next"
+      ]
+    }
+  },
+
+  // Forward ports for the demo server
+  "forwardPorts": [8082],
+  "portsAttributes": {
+    "8082": {
+      "label": "Demo Server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  // Run npm install after container is created
+  "postCreateCommand": "npm install",
+
+  // Keep container running
+  "overrideCommand": true,
+
+  // Set environment variables
+  "remoteEnv": {
+    "PORT": "8082"
+  },
+
+  // Use 'forwardPorts' to make a list of ports inside the container available locally
+  "mounts": [
+    "source=${localWorkspaceFolder}/node_modules,target=/workspace/node_modules,type=bind,consistency=cached"
+  ]
+}

@@ -11,7 +11,7 @@ class AuthManager {
     this.client = null;
     this.user = null;
     this.isAuthenticated = false;
-    this.permissions = [];
+    this.permissions = { permissions: [] };
     this.claims = {};
     this.authEnabled = AUTH_ENABLED;
   }
@@ -174,7 +174,10 @@ class AuthManager {
    * @param {string} permission - Permission to check (e.g., 'use:premium-features')
    */
   hasPermission(permission) {
-    return this.permissions && this.permissions.permissions.includes(permission);
+    return this.permissions && 
+           this.permissions.permissions && 
+           Array.isArray(this.permissions.permissions) &&
+           this.permissions.permissions.includes(permission);
   }
 
   /**
@@ -214,7 +217,7 @@ class AuthManager {
     // Define feature access based on subscription tier
     const featureAccess = {
       'playlist': { tiers: ['free', 'premium', 'pro'], permission: null },
-      'external-urls': { tiers: ['premium', 'pro'], permission: 'use:external-urls' },
+      'external-urls': { tiers: ['free', 'premium', 'pro'], permission: null },
       'export-midi': { tiers: ['free', 'premium', 'pro'], permission: null },
       'export-musicxml': { tiers: ['premium', 'pro'], permission: 'export:musicxml' },
       'offline-mode': { tiers: ['pro'], permission: 'use:offline-mode' },

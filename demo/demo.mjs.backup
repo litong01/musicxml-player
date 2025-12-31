@@ -361,13 +361,8 @@ async function createConverter(converter, sheet, groove, renderer) {
         return new FetchConverter(midi);
       }
     case 'vrv':
-      // NOTE: AccompanimentEngine has a known infinite loop issue and is currently disabled
-      // When enabled, generateBandMidiFromMusicXML() hangs the browser
-      // TODO: Debug and fix the infinite loop in AccompanimentEngine before re-enabling
-      const useAccompaniment = false;
-      
       // Check if we need to use AccompanimentEngine
-      if (useAccompaniment && (g_state.accompanimentMode === 'band-only' || g_state.accompanimentMode === 'solo-and-band')) {
+      if (g_state.accompanimentMode === 'band-only' || g_state.accompanimentMode === 'solo-and-band') {
         // Use AccompanimentEngine to generate band MIDI
         return {
           _midi: null,
@@ -1849,25 +1844,57 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('play').addEventListener('click', async () => {
     if (g_state.player) {
       try {
-        g_state.player.play();
+
+          // Check if there are any MIDI events
+          if (g_state.player._sequencer.midiData) {
+            const midiData = g_state.player._sequencer.midiData;
+            console.log('MIDI data info:', {
+              tracks: midiData.tracks?.length,
+              duration: midiData.duration,
+              timeDivision: midiData.timeDivision,
+            });
+
+            // Check each track for events
+            if (midiData.tracks) {
+              midiData.tracks.forEach((track, i) => {
+                console.log(`Track ${i}:`, track);
+                if (Array.isArray(track)) {
+                  console.log(`  - Events: ${track.length}`);
+                  if (track.length > 0) {
+                    console.log(`  - First event:`, track[0]);
+                  }
+                }
+              });
+            }
+          }
+        }, 100);
+
+        console.log('✓ player.play() called');
       } catch (error) {
-        console.error('Error calling player.play():', error);
+        console.error('❌ Error calling player.play():', error);
+        console.error('Error stack:', error.stack);
       }
+    } else {
+      console.error('❌ No player instance available');
     }
   });
   document.getElementById('pause').addEventListener('click', async () => {
+    console.log('Pause button clicked');
     g_state.player?.pause();
   });
   document.getElementById('rewind').addEventListener('click', async () => {
+    console.log('Rewind button clicked');
     g_state.player?.rewind();
   });
 
   // Playlist navigation buttons
   document.getElementById('prev').addEventListener('click', async () => {
+    console.log('Previous button clicked');
     await playPreviousSong();
   });
 
   document.getElementById('next').addEventListener('click', async () => {
+    console.log('Next button clicked');
     await playNextSong();
   });
 

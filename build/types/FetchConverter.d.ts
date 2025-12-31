@@ -16,6 +16,10 @@ export declare class FetchConverter implements IMIDIConverter {
     protected _midi?: ArrayBuffer;
     constructor(_midiOrUri: ArrayBuffer | string, _timemapOrUri?: string | MeasureTimemap | undefined);
     initialize(musicXml: string, options: Required<PlayerOptions>): Promise<void>;
+    /**
+     * Generate timemap using Verovio as fallback when XSL transformation fails.
+     */
+    private _generateTimemapWithVerovio;
     get midi(): ArrayBuffer;
     get timemap(): MeasureTimemap;
     get version(): string;

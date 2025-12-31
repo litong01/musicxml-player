@@ -228,20 +228,20 @@ export class Player {
     if (this._options.output) {
       this._sequencer.connectMIDIOutput(this._options.output);
     }
-    
+
     const midiArrayBuffer = this._midi.writeMIDI();
-    
+
     // CRITICAL: writeMIDI() is destructive - it clears the events from tracks
     // We must recreate the BasicMIDI from the ArrayBuffer to get events back
     this._midi = BasicMIDI.fromArrayBuffer(midiArrayBuffer);
-    
+
     this._sequencer.loadNewSongList([{ binary: midiArrayBuffer }]);
 
     // Initialize the playback options.
     this.mute = this._options.mute;
     this._sequencer.playbackRate = this._options.velocity;
     this._sequencer.loopCount = this._options.repeat;
-    
+
     // Move cursor to the start position (measure 0, timestamp 0)
     this._options.renderer.moveTo(0, 0, 0, 0);
 
@@ -472,7 +472,7 @@ export class Player {
    */
   protected static _adjustMidiDuration(converter: IMIDIConverter): BasicMIDI {
     const midi = BasicMIDI.fromArrayBuffer(converter.midi);
-    
+
     // Skip duration adjustment - let MIDI file define its own duration
     // const duration = converter.timemap.reduce(
     //   (duration, entry) => duration + entry.duration,
@@ -487,7 +487,7 @@ export class Player {
     //   data: new Uint8Array([50, 0]),
     // });
     // midi.flush();
-    
+
     return midi;
   }
 }
