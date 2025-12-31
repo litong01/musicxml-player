@@ -303,7 +303,7 @@ export class Player {
       .last();
     if (entry) {
       this._sequencer.currentTime =
-        (entry.timestamp + measureOffset - 1) / 1000;
+        (entry.timestamp + measureOffset) / 1000;
     }
 
     // Set the cursor position.
