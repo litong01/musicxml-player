@@ -10,6 +10,7 @@ import {
   OpenSheetMusicDisplayRenderer,
   MmaConverter,
   FetchConverter,
+  AccompanimentConverter,
   parseMusicXml,
   parseMusicXmlTimemap,
   SaxonJSProcessor,
@@ -178,43 +179,59 @@ async function createPlayer() {
   }
   document.getElementById(`renderer-${renderer}`).checked = true;
 
-  // Auto-detect converter: prefer custom MIDI if available, otherwise use Verovio
-  let detectedConverter = 'vrv'; // Default to Verovio
+  // Auto-detect converter: prefer custom MIDI if available, otherwise generate
+  let detectedConverter = 'vrv'; // Default to Verovio (for solo-only mode)
+  let hasMidiFile = false;
 
   // Check if custom MIDI file exists in data directory (skip for external URLs)
   const baseName = base
     .replace(/\.(musicxml|mxl|xml)$/i, '')
     .replace(/^data\//, '');
 
-  // Skip cached MIDI when using band accompaniment mode (needs fresh generation)
   const shouldUseBandMode =
     g_state.accompanimentMode === 'band-only' ||
     g_state.accompanimentMode === 'solo-and-band';
 
-  if (baseName !== 'remote-file' && !shouldUseBandMode) {
-    try {
-      const midiPath = base.replace(/\.\w+$/, '.mid');
-      await fetish(midiPath, { method: 'HEAD' });
-      detectedConverter = 'midi';
-    } catch {
-      // Check IndexedDB cache for uploaded MIDI files
-      if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
-        const cached = await retrieveMidiFile(baseName);
-        if (cached) {
-          detectedConverter = 'midi';
+  // Skip MIDI file check when using band mode (need to generate fresh with accompaniment)
+  if (!shouldUseBandMode) {
+    // Check for existing MIDI files only in solo-only mode
+    if (baseName !== 'remote-file') {
+      try {
+        const midiPath = base.replace(/\.\w+$/, '.mid');
+        await fetish(midiPath, { method: 'HEAD' });
+        detectedConverter = 'midi';
+        hasMidiFile = true;
+      } catch {
+        // Check IndexedDB cache for uploaded MIDI files
+        if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
+          const cached = await retrieveMidiFile(baseName);
+          if (cached) {
+            detectedConverter = 'midi';
+            hasMidiFile = true;
+          }
         }
       }
-    }
-  } else if (!shouldUseBandMode) {
-    // For external URLs, check IndexedDB cache only
-    const cached = await retrieveMidiFile(baseName);
-    if (cached) {
-      detectedConverter = 'midi';
+    } else {
+      // For external URLs, check IndexedDB cache only
+      const cached = await retrieveMidiFile(baseName);
+      if (cached) {
+        detectedConverter = 'midi';
+        hasMidiFile = true;
+      }
     }
   }
 
-  // Override converter parameter with auto-detected value
-  converter = detectedConverter;
+  // Choose converter based on mode and MIDI availability
+  if (shouldUseBandMode) {
+    // Band mode always generates fresh MIDI with accompaniment
+    converter = 'accomp';
+  } else if (hasMidiFile) {
+    // Solo mode with existing MIDI file
+    converter = 'midi';
+  } else {
+    // Solo mode without MIDI file - generate with Verovio
+    converter = 'vrv';
+  }
 
   // Create new player.
   if (g_state.musicXml) {
@@ -232,7 +249,7 @@ async function createPlayer() {
         renderer: await createRenderer(renderer, sheet, options),
         output: undefined, // Always use local synth
         converter: converterInstance,
-        unroll: options.unroll,
+        unroll: options.unroll, // For rendering - user controls whether to show repeats
         mute: options.mute,
         repeat: repeat === '-1' ? Infinity : Number(repeat),
         velocity: Number(velocity),
@@ -370,6 +387,13 @@ async function createConverter(converter, sheet, groove, renderer) {
     case 'vrv':
       // Use VerovioConverter for all accompaniment modes
       return new VerovioConverter(g_state.vrvOptions);
+    case 'accomp':
+      // Use AccompanimentConverter to generate band accompaniment
+      return new AccompanimentConverter({
+        bandEnergy: 'medium',
+        outputMode: g_state.accompanimentMode || 'solo-and-band',
+        drummerPracticeMode: true,
+      });
     case 'mma':
       const parameters = {};
       if (groove !== DEFAULT_GROOVE) {
@@ -1112,7 +1136,7 @@ async function handleFileUpload(e) {
 
 function handleOptionChange(e) {
   const newOptions = {
-    unroll: false, // Always unchecked
+    unroll: false, // Always unchecked - show repeat signs
     horizontal: false, // Always unchecked
     mute: !!document.getElementById('option-mute').checked,
     follow: true, // Always checked

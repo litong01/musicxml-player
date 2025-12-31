@@ -1,6 +1,19 @@
 # Using AccompanimentConverter
 
-The `AccompanimentConverter` generates MIDI files with full band accompaniment (piano, bass, drums, pads) from MusicXML scores.
+The `AccompanimentConverter` generates MIDI files with full band accompaniment (piano, bass, drums) from MusicXML scores. **This is now fully implemented and working!**
+
+## How It Works
+
+The converter:
+
+1. **Parses MusicXML** to extract melody notes and musical context
+2. **Detects key signature** from the score
+3. **Infers chord progressions** based on melody analysis
+4. **Generates accompaniment tracks**:
+   - **Piano**: Chord voicings with proper inversions
+   - **Bass**: Root notes and fifths following the harmony
+   - **Drums**: Basic beat pattern (kick, snare, hi-hat)
+5. **Expands repeats** automatically for proper playback
 
 ## Basic Usage
 
@@ -12,11 +25,11 @@ const converter = new AccompanimentConverter();
 
 // Or with custom band options
 const converter = new AccompanimentConverter({
-  introMode: 'auto',           // 'auto' | 'always' | 'none'
-  introIntensity: 'medium',    // 'soft' | 'medium' | 'strong'
-  bandEnergy: 'strong',        // 'soft' | 'medium' | 'strong'
+  introMode: 'auto', // 'auto' | 'always' | 'none'
+  introIntensity: 'medium', // 'soft' | 'medium' | 'strong'
+  bandEnergy: 'strong', // 'soft' | 'medium' | 'strong'
   outputMode: 'solo-and-band', // 'solo-only' | 'band-only' | 'solo-and-band'
-  drummerPracticeMode: true    // for percussion scores: invent harmony + band
+  drummerPracticeMode: true, // for percussion scores: invent harmony + band
 });
 
 // Use with Player
@@ -31,37 +44,48 @@ const player = await Player.create({
 ## Band Options
 
 ### `introMode`
+
 How intro measures behave:
+
 - `'auto'` (default): Automatically detect intro measures
 - `'always'`: Always add an intro
 - `'none'`: No intro
 
 ### `introIntensity`
+
 How strong the intro is:
+
 - `'soft'`: Minimal intro
 - `'medium'` (default): Balanced intro
 - `'strong'`: Full-energy intro
 
 ### `bandEnergy`
+
 Overall band density and energy:
+
 - `'soft'`: Sparse, minimal accompaniment
 - `'medium'` (default): Balanced band parts
 - `'strong'`: Dense, energetic accompaniment
 
 ### `outputMode`
+
 Which tracks to include in output:
+
 - `'solo-only'`: Only the melody/original drums
 - `'band-only'`: Only the generated band parts
 - `'solo-and-band'` (default): Both solo and band
 
 ### `drummerPracticeMode`
+
 For percussion-only scores:
+
 - `true` (default): Generate harmony and full band
 - `false`: Only output the original drums
 
 ## How It Works
 
 ### For Pitched Scores (Melody)
+
 1. Extracts the melody from the MusicXML
 2. Detects the key
 3. Infers chord progression from the melody
@@ -71,6 +95,7 @@ For percussion-only scores:
    - Drum kit pattern (kick, snare, hi-hat, fills)
 
 ### For Percussion Scores (Drums)
+
 1. Extracts the original drum parts
 2. If `drummerPracticeMode` is enabled:
    - Generates a generic chord progression (I-V-vi-IV)
@@ -102,7 +127,7 @@ async function createPlayerWithBand(musicXml: string) {
 }
 
 // Usage
-const musicXmlContent = await fetch('score.musicxml').then(r => r.text());
+const musicXmlContent = await fetch('score.musicxml').then((r) => r.text());
 const player = await createPlayerWithBand(musicXmlContent);
 player.play();
 ```
@@ -114,7 +139,7 @@ You can use `AccompanimentConverter` as a fallback when MIDI files are not avail
 ```typescript
 async function createConverterWithFallback(sheet: string) {
   const midiUrl = sheet.replace(/\.\w+$/, '.mid');
-  
+
   try {
     // Try to fetch existing MIDI file
     await fetch(midiUrl, { method: 'HEAD' });
@@ -145,6 +170,7 @@ case 'accomp':
 ```
 
 Then add an option in the HTML:
+
 ```html
 <select id="converter">
   <option value="vrv">Verovio</option>
