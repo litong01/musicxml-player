@@ -84,6 +84,7 @@ const DEFAULT_OPTIONS = {
   follow: true,
   mute: false,
   respectLineBreaks: false,
+  showMeasureNumbers: false,
 };
 
 const PLAYER_PLAYING = 1;
@@ -308,6 +309,7 @@ async function createRenderer(renderer, sheet, options) {
       return new OpenSheetMusicDisplayRenderer(
         {
           newSystemFromXML: options.respectLineBreaks ?? false,
+          drawMeasureNumbers: options.showMeasureNumbers ?? true,
         },
         {
           MinMeasureToDrawIndex: 0,
@@ -319,11 +321,16 @@ async function createRenderer(renderer, sheet, options) {
         },
       );
     case 'vrv':
-      return new VerovioRenderer({
+      const vrvOptions = {
         fingeringScale: 0.6,
         justificationBracketGroup: 5,
         scale: 60,
-      });
+      };
+      if (options.showMeasureNumbers) {
+        vrvOptions.barNumbers = 'system';
+        vrvOptions.barNumbersInterval = 0;
+      }
+      return new VerovioRenderer(vrvOptions);
     case 'mscore':
       document.querySelectorAll('.renderer-option').forEach((element) => {
         element.disabled = true;
@@ -1141,6 +1148,7 @@ function handleOptionChange(e) {
     mute: !!document.getElementById('option-mute').checked,
     follow: true, // Always checked
     respectLineBreaks: !!document.getElementById('respect-line-breaks').checked,
+    showMeasureNumbers: !!document.getElementById('show-measure-numbers').checked,
   };
 
   // If in settings modal, update pending settings
@@ -1793,6 +1801,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         follow: true,
         mute: stored.options?.mute || false,
         respectLineBreaks: stored.options?.respectLineBreaks || false,
+        showMeasureNumbers: stored.options?.showMeasureNumbers ?? false,
       };
       // Restore accompaniment mode
       g_state.accompanimentMode = stored.accompanimentMode || 'solo-only';
@@ -1927,6 +1936,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   );
   respectLineBreaksCheckbox.checked = g_state.options.respectLineBreaks;
   respectLineBreaksCheckbox.addEventListener('change', handleOptionChange);
+  
+  // Initialize and add listener for show-measure-numbers checkbox
+  const showMeasureNumbersCheckbox = document.getElementById(
+    'show-measure-numbers',
+  );
+  showMeasureNumbersCheckbox.checked = g_state.options.showMeasureNumbers ?? false;
+  showMeasureNumbersCheckbox.addEventListener('change', handleOptionChange);
+  
   window.addEventListener('keydown', handlePlayPauseKey);
 
   // Settings modal controls
