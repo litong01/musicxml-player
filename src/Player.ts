@@ -14,6 +14,7 @@ import {
   MusicXmlParseResult,
   fetish,
   debounce,
+  addMetronomeTrack,
 } from './helpers';
 
 const DEBOUNCE_THROTTLE = 100;
@@ -102,6 +103,11 @@ export interface PlayerOptions {
    */
   followCursor?: boolean;
   /**
+   * A flag to add a metronome click track to the MIDI output.
+   * Optional, default: false
+   */
+  metronome?: boolean;
+  /**
    * XSLT processor instance for XML processing.
    * Optional, default: new SaxonJSAdapter()
    */
@@ -118,6 +124,7 @@ const DEFAULT_PLAYER_OPTIONS = {
   output: null,
   unroll: false,
   mute: false,
+  metronome: false,
   repeat: 1,
   velocity: 1,
   horizontal: false,
@@ -222,7 +229,10 @@ export class Player {
 
     // Create the MIDI player.
     this._state = PlayerState.Stopped;
-    this._midi = Player._adjustMidiDuration(this._options.converter);
+    this._midi = Player._adjustMidiDuration(
+      this._options.converter,
+      this._options.metronome,
+    );
     this._duration = this._midi.duration * 1000;
     this._sequencer = new Sequencer(this._synthesizer);
     if (this._options.output) {
@@ -470,8 +480,21 @@ export class Player {
    *
    * @see https://github.com/spessasus/SpessaSynth/discussions/176
    */
-  protected static _adjustMidiDuration(converter: IMIDIConverter): BasicMIDI {
-    const midi = BasicMIDI.fromArrayBuffer(converter.midi);
+  protected static _adjustMidiDuration(
+    converter: IMIDIConverter,
+    addMetronome: boolean = false,
+  ): BasicMIDI {
+    let midiBuffer = converter.midi;
+
+    // Add metronome track if requested
+    if (addMetronome) {
+      const midi = BasicMIDI.fromArrayBuffer(midiBuffer);
+      const tempo = midi.tempoChanges[0]?.tempo || 120;
+      const duration = midi.duration;
+      midiBuffer = addMetronomeTrack(midiBuffer, tempo, duration);
+    }
+
+    const midi = BasicMIDI.fromArrayBuffer(midiBuffer);
 
     // Skip duration adjustment - let MIDI file define its own duration
     // const duration = converter.timemap.reduce(

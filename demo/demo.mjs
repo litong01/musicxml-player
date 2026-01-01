@@ -83,6 +83,7 @@ const DEFAULT_OPTIONS = {
   horizontal: false,
   follow: true,
   mute: false,
+  metronome: false,
   respectLineBreaks: false,
   showMeasureNumbers: false,
 };
@@ -252,6 +253,7 @@ async function createPlayer() {
         converter: converterInstance,
         unroll: options.unroll, // For rendering - user controls whether to show repeats
         mute: options.mute,
+        metronome: options.metronome,
         repeat: repeat === '-1' ? Infinity : Number(repeat),
         velocity: Number(velocity),
         horizontal: options.horizontal,
@@ -1153,6 +1155,7 @@ function handleOptionChange(e) {
     unroll: false, // Always unchecked - show repeat signs
     horizontal: false, // Always unchecked
     mute: !!document.getElementById('option-mute').checked,
+    metronome: !!document.getElementById('option-metronome').checked,
     follow: true, // Always checked
     respectLineBreaks: !!document.getElementById('respect-line-breaks').checked,
     showMeasureNumbers: !!document.getElementById('show-measure-numbers').checked,
@@ -1807,6 +1810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         horizontal: false,
         follow: true,
         mute: stored.options?.mute || false,
+        metronome: stored.options?.metronome || false,
         respectLineBreaks: stored.options?.respectLineBreaks || false,
         showMeasureNumbers: stored.options?.showMeasureNumbers ?? false,
       };
