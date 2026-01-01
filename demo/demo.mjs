@@ -581,8 +581,15 @@ async function applyMusicSourceChange(settings) {
         }
         break;
       case 'upload':
-        // Upload file is handled immediately on file selection
-        return false; // File already loaded
+        if (settings.uploadFiles) {
+          // Clear pendingSettings temporarily
+          const savedPending = g_state.pendingSettings;
+          g_state.pendingSettings = null;
+          await handleFileUpload({ target: { files: settings.uploadFiles } });
+          g_state.pendingSettings = savedPending;
+          return false; // Don't call createPlayer, handleFileUpload already did
+        }
+        return false;
       case 'url':
         if (settings.urlValue) {
           // Clear pendingSettings temporarily
@@ -1882,12 +1889,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('upload').addEventListener('change', (e) => {
     // Auto-select the upload radio button when file is selected
     if (e.target.files.length > 0) {
-      if (g_state.pendingSettings) {
-        g_state.pendingSettings.musicSource = 'upload';
-      }
+      g_state.pendingSettings.musicSource = 'upload';
+      g_state.pendingSettings.uploadFiles = Array.from(e.target.files);
       document.getElementById('source-upload').checked = true;
     }
-    handleFileUpload(e);
   });
   document.getElementById('samples').addEventListener('change', (e) => {
     // Update pending settings when sample changes
