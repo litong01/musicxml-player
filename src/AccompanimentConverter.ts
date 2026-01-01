@@ -495,9 +495,9 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     // Energy settings
     const energyMap = {
-      soft: { piano: 0.5, bass: 0.6, drums: 0.4 },
-      medium: { piano: 0.7, bass: 0.75, drums: 0.6 },
-      strong: { piano: 0.85, bass: 0.9, drums: 0.8 },
+      soft: { piano: 0.5, bass: 0.6, strings: 0.4, brass: 0.5, drums: 0.4 },
+      medium: { piano: 0.7, bass: 0.75, strings: 0.6, brass: 0.7, drums: 0.6 },
+      strong: { piano: 0.85, bass: 0.9, strings: 0.75, brass: 0.9, drums: 0.8 },
     };
 
     const energy = energyMap[this._options.bandEnergy];
@@ -567,6 +567,58 @@ export class AccompanimentConverter implements IMIDIConverter {
             duration: beatDuration * 0.8,
             velocity: (velocity * 0.8) / 127,
           });
+        }
+      }
+    }
+
+    // Add string pad track (if not solo-only mode)
+    if (this._options.outputMode !== 'solo-only') {
+      const stringsTrack = midi.addTrack();
+      stringsTrack.name = 'Strings';
+      stringsTrack.channel = 3;
+      stringsTrack.instrument.number = 48; // String Ensemble 1
+
+      for (const chord of chords) {
+        const voicing = this._getChordVoicing(chord);
+        const velocity = 50 * energy.strings; // Softer than piano for pad effect
+
+        for (const pitch of voicing) {
+          stringsTrack.addNote({
+            midi: pitch,
+            time: chord.time,
+            duration: chord.duration, // Full sustain for pad
+            velocity: velocity / 127,
+          });
+        }
+      }
+    }
+
+    // Add brass section track (if not solo-only mode)
+    if (this._options.outputMode !== 'solo-only') {
+      const brassTrack = midi.addTrack();
+      brassTrack.name = 'Brass';
+      brassTrack.channel = 4;
+      brassTrack.instrument.number = 61; // Brass Section
+
+      const beatDuration = 60 / tempo;
+
+      for (const chord of chords) {
+        const voicing = this._getChordVoicing(chord);
+        const velocity = 75 * energy.brass;
+
+        // Play on strong beats (1 and 3 of a 4-beat measure)
+        const beatInMeasure = Math.floor(chord.time / beatDuration) % 4;
+        const isStrongBeat = beatInMeasure === 0 || beatInMeasure === 2;
+
+        if (isStrongBeat) {
+          for (const pitch of voicing) {
+            brassTrack.addNote({
+              midi: pitch,
+              time: chord.time,
+              duration: chord.duration * 0.6, // Punchy, not too long
+              velocity: velocity / 127,
+            });
+          }
         }
       }
     }
