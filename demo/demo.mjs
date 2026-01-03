@@ -512,13 +512,6 @@ async function handleApplySettings() {
   const accompanimentChanged =
     settings.accompanimentMode !== g_state.accompanimentMode;
 
-  console.log(
-    '[handleApplySettings] Current renderer:',
-    g_state.params.get('renderer'),
-  );
-  console.log('[handleApplySettings] Settings renderer:', settings.renderer);
-  console.log('[handleApplySettings] Renderer changed:', rendererChanged);
-
   // Check if any renderer options changed (these require reload)
   const currentOptions = g_state.options;
   const metronomeChanged =
@@ -530,22 +523,8 @@ async function handleApplySettings() {
   const renderOptionsChanged =
     metronomeChanged || respectLineBreaksChanged || showMeasureNumbersChanged;
 
-  console.log('[handleApplySettings] metronomeChanged:', metronomeChanged);
-  console.log(
-    '[handleApplySettings] respectLineBreaksChanged:',
-    respectLineBreaksChanged,
-  );
-  console.log(
-    '[handleApplySettings] showMeasureNumbersChanged:',
-    showMeasureNumbersChanged,
-  );
-
   // Apply renderer
   if (rendererChanged) {
-    console.log(
-      '[handleApplySettings] Setting renderer to:',
-      settings.renderer,
-    );
     g_state.params.set('renderer', settings.renderer);
   }
 
@@ -591,25 +570,11 @@ async function handleApplySettings() {
   // Reload player if any of these changed:
   // musicSourceChanged == true: music source didn't change, but we may need reload for other settings
   // musicSourceChanged == false: music source changed, handler already called createPlayer()
-  console.log('[handleApplySettings] musicSourceChanged:', musicSourceChanged);
-  console.log('[handleApplySettings] rendererChanged:', rendererChanged);
-  console.log(
-    '[handleApplySettings] accompanimentChanged:',
-    accompanimentChanged,
-  );
-  console.log(
-    '[handleApplySettings] renderOptionsChanged:',
-    renderOptionsChanged,
-  );
   if (
     musicSourceChanged &&
     (rendererChanged || accompanimentChanged || renderOptionsChanged)
   ) {
-    // Only other settings changed, not music source - need to reload
-    console.log('[handleApplySettings] Calling createPlayer()');
     createPlayer();
-  } else {
-    console.log('[handleApplySettings] NOT calling createPlayer()');
   }
   // If musicSourceChanged is false, the music source handler already called createPlayer()
   // with all the updated settings, so we don't need to call it again
@@ -618,17 +583,6 @@ async function handleApplySettings() {
 async function applyMusicSourceChange(settings) {
   const currentSource = determineCurrentMusicSource();
   const currentSheet = g_state.params.get('sheet') ?? DEFAULT_SHEET;
-
-  console.log('[applyMusicSourceChange] Current source:', currentSource);
-  console.log(
-    '[applyMusicSourceChange] Settings source:',
-    settings.musicSource,
-  );
-  console.log('[applyMusicSourceChange] Current sheet:', currentSheet);
-  console.log(
-    '[applyMusicSourceChange] Settings sampleValue:',
-    settings.sampleValue,
-  );
 
   // Check if source changed
   const sourceChanged = settings.musicSource !== currentSource;
@@ -651,9 +605,6 @@ async function applyMusicSourceChange(settings) {
     valueChanged =
       settings.playlistId && settings.playlistId !== g_state.currentPlaylistId;
   }
-
-  console.log('[applyMusicSourceChange] Source changed:', sourceChanged);
-  console.log('[applyMusicSourceChange] Value changed:', valueChanged);
 
   // If source changed OR value changed, load the new music
   if (sourceChanged || valueChanged) {

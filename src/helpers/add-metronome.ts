@@ -36,10 +36,6 @@ export function addMetronomeTrack(
     firstNoteTime = 0;
   }
 
-  console.log(
-    `[addMetronomeTrack] First note at ${firstNoteTime.toFixed(2)}s, starting metronome from there`,
-  );
-
   // Add metronome track
   const metronomeTrack = midi.addTrack();
   metronomeTrack.name = 'Metronome';
@@ -47,10 +43,6 @@ export function addMetronomeTrack(
 
   // If we have a timemap, use it for precise measure-based metronome
   if (timemap && timemap.length > 0) {
-    console.log(
-      `[addMetronomeTrack] Using timemap with ${timemap.length} measures`,
-    );
-
     for (const entry of timemap) {
       const measureStart = entry.timestamp / 1000; // Convert ms to seconds
       const measureDuration = entry.duration / 1000; // Convert ms to seconds
@@ -71,10 +63,6 @@ export function addMetronomeTrack(
 
       // Calculate beat duration for this measure
       const beatDuration = measureDuration / beatsPerMeasure;
-
-      console.log(
-        `[addMetronomeTrack] Measure ${entry.measure + 1}: ${beatsPerMeasure}/${timeSignature[1]}, duration=${measureDuration.toFixed(2)}s, beatDuration=${beatDuration.toFixed(2)}s`,
-      );
 
       // Generate clicks for this measure
       for (let beat = 0; beat < beatsPerMeasure; beat++) {
@@ -101,9 +89,6 @@ export function addMetronomeTrack(
     }
   } else {
     // Fallback: Use constant 4/4 time signature throughout
-    console.log(
-      `[addMetronomeTrack] No timemap provided, using constant 4/4 time signature`,
-    );
 
     const beatsPerMeasure = 4;
     const beatUnit = 4;

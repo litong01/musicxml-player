@@ -108,10 +108,6 @@ export function normalizeMeasures(
         previousTempo = tempo;
       }
     }
-
-    console.log(
-      `[normalizeMeasures] Removed ${tempoCounts.removed} tempo directions, added ${tempoCounts.added} new ones`,
-    );
   }
 
   const builder = new XMLBuilder({

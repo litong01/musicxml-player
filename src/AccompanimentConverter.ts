@@ -75,14 +75,7 @@ export class AccompanimentConverter implements IMIDIConverter {
     });
     const normalizedXmlDoc = parser.parse(normalizedUnrolled);
 
-    // Generate timemap from normalized unrolled XML
-    console.log(
-      '[AccompanimentConverter] Generating timemap from normalized unrolled XML',
-    );
     this._timemap = this._generateTimemapFromXML(normalizedXmlDoc);
-    console.log(
-      `[AccompanimentConverter] Timemap generated: ${this._timemap.length} entries`,
-    );
 
     // Extract tempo from ORIGINAL MusicXML (for reference only)
     const originalXmlDoc = parser.parse(musicXml);
@@ -91,65 +84,15 @@ export class AccompanimentConverter implements IMIDIConverter {
     // Parse the NORMALIZED UNROLLED MusicXML for note extraction
     const unrolledXmlDoc = parser.parse(normalizedUnrolled);
 
-    // Extract tempo changes from NORMALIZED UNROLLED XML
     // This has the correct tempo flow considering repeats
     const unrolledTempoChanges =
       this._extractTempoChangesFromUnrolled(unrolledXmlDoc);
 
-    console.log(
-      `[AccompanimentConverter] Extracted ${unrolledTempoChanges.length} tempo change(s) from normalized unrolled XML`,
-    );
-
-    // DEBUG: Log measure count and structure
-    const scorePartwise = unrolledXmlDoc['score-partwise'];
-    if (scorePartwise && scorePartwise.part) {
-      const parts = Array.isArray(scorePartwise.part)
-        ? scorePartwise.part
-        : [scorePartwise.part];
-      if (parts[0] && parts[0].measure) {
-        const measures = Array.isArray(parts[0].measure)
-          ? parts[0].measure
-          : [parts[0].measure];
-        console.log(
-          `[AccompanimentConverter] Unrolled XML has ${measures.length} measures`,
-        );
-      }
-    }
-
-    // Extract melody notes from UNROLLED and NORMALIZED XML
     // Each measure has explicit tempo from normalization
     const { notes, isPercussion } = this._extractNotes(
       unrolledXmlDoc,
       initialTempo,
     );
-
-    // Debug: Check note timeline
-    if (notes.length > 0) {
-      const lastNote = notes[notes.length - 1];
-      const notesEndTime = lastNote.time + lastNote.duration;
-      console.log(
-        `[AccompanimentConverter] Notes timeline: first note at ${notes[0].time.toFixed(2)}s, last note ends at ${notesEndTime.toFixed(2)}s`,
-      );
-      console.log(
-        `[AccompanimentConverter] Total notes generated: ${notes.length}`,
-      );
-
-      // Find notes around measure 14-15 (37-42 seconds)
-      const notesInRange = notes.filter((n) => n.time >= 35 && n.time <= 45);
-      console.log(
-        `[AccompanimentConverter] Notes between 35-45s: ${notesInRange.length} notes`,
-      );
-      if (notesInRange.length > 0) {
-        console.log(
-          `[AccompanimentConverter] First note in range: time=${notesInRange[0].time.toFixed(2)}s, duration=${notesInRange[0].duration.toFixed(2)}s`,
-        );
-        console.log(
-          `[AccompanimentConverter] Last note in range: time=${notesInRange[notesInRange.length - 1].time.toFixed(2)}s, duration=${notesInRange[notesInRange.length - 1].duration.toFixed(2)}s`,
-        );
-      }
-    } else {
-      console.warn('[AccompanimentConverter] No notes extracted!');
-    }
 
     // Map tempo changes from unrolled XML to timemap positions
     const tempo = initialTempo;
@@ -166,51 +109,17 @@ export class AccompanimentConverter implements IMIDIConverter {
       const timemapIndex = change.position + 1;
       if (timemapIndex >= 0 && timemapIndex < this._timemap.length) {
         const timemapEntry = this._timemap[timemapIndex];
-        console.log(
-          `[AccompanimentConverter] Tempo change at array position ${change.position} → timemap[${timemapIndex}]: ${change.bpm} BPM, measure ${timemapEntry.measure} at ${(timemapEntry.timestamp / 1000).toFixed(2)}s`,
-        );
         tempoChanges.push({
           time: timemapEntry.timestamp / 1000, // Convert ms to seconds
           bpm: change.bpm,
           measure: timemapEntry.measure,
           position: timemapIndex,
         });
-      } else {
-        console.warn(
-          `[AccompanimentConverter] No timemap entry at index ${timemapIndex} (array position ${change.position})`,
-        );
       }
     }
 
     // Sort tempo changes by time to ensure they're in chronological order
     tempoChanges.sort((a, b) => a.time - b.time);
-
-    // PHASE 2: Log tempo changes
-    if (tempoChanges.length > 0) {
-      console.log(
-        `[AccompanimentConverter] Using ${tempoChanges.length} tempo change(s):`,
-      );
-      tempoChanges.forEach((change) => {
-        console.log(
-          `  Position ${change.position} - Measure ${change.measure} (${change.time.toFixed(2)}s): ${change.bpm} BPM`,
-        );
-      });
-    } else {
-      console.log(
-        `[AccompanimentConverter] No tempo changes detected. Using ${tempo} BPM throughout.`,
-      );
-    }
-
-    // DEBUG: Log timemap entries around measure 14-15 to analyze tempo
-    console.log('[AccompanimentConverter] Timemap entries for measures 13-16:');
-    for (let m = 13; m <= 16; m++) {
-      const entries = this._timemap.filter((e) => e.measure === m);
-      entries.forEach((e) => {
-        console.log(
-          `  Measure ${e.measure}: ${(e.timestamp / 1000).toFixed(2)}s, duration ${(e.duration / 1000).toFixed(2)}s`,
-        );
-      });
-    }
 
     // Detect key signature
     const keySignature = this._detectKey(unrolledXmlDoc, notes);
@@ -238,29 +147,7 @@ export class AccompanimentConverter implements IMIDIConverter {
     const midi = new Midi(midiArray);
     const actualMidiDuration = midi.duration;
 
-    console.log(
-      `[AccompanimentConverter] MIDI duration: ${actualMidiDuration.toFixed(2)}s`,
-    );
-
     if (this._timemap.length > 0) {
-      const lastEntry = this._timemap[this._timemap.length - 1];
-      const timemapTotalDuration =
-        (lastEntry.timestamp + lastEntry.duration) / 1000;
-
-      console.log(
-        `[AccompanimentConverter] Timemap total duration: ${timemapTotalDuration.toFixed(2)}s`,
-      );
-
-      if (Math.abs(actualMidiDuration - timemapTotalDuration) > 1) {
-        console.warn(
-          `[AccompanimentConverter] WARNING: MIDI duration (${actualMidiDuration.toFixed(2)}s) differs from timemap (${timemapTotalDuration.toFixed(2)}s) by ${Math.abs(actualMidiDuration - timemapTotalDuration).toFixed(2)}s`,
-        );
-      } else {
-        console.log(
-          `[AccompanimentConverter] MIDI and timemap durations match within tolerance`,
-        );
-      }
-
       // Ensure timemap covers the full MIDI duration
       const lastEntryAfterScale = this._timemap[this._timemap.length - 1];
       const timemapEndTime =
@@ -324,18 +211,12 @@ export class AccompanimentConverter implements IMIDIConverter {
                   initialTempo = newTempo;
                   currentTempo = newTempo;
                   foundInitialTempo = true;
-                  console.log(
-                    `[AccompanimentConverter] Initial tempo: ${initialTempo} BPM at measure ${measureNumber}`,
-                  );
                 } else if (newTempo !== currentTempo) {
                   // Tempo change detected
                   tempoChanges.push({
                     bpm: newTempo,
                     measure: measureNumber,
                   });
-                  console.log(
-                    `[AccompanimentConverter] Tempo change: ${newTempo} BPM at measure ${measureNumber}`,
-                  );
                   currentTempo = newTempo;
                 }
               }
@@ -350,9 +231,6 @@ export class AccompanimentConverter implements IMIDIConverter {
       );
     }
 
-    console.log(
-      `[AccompanimentConverter] Extracted tempo metadata from original: ${initialTempo} BPM (initial), ${tempoChanges.length} change(s)`,
-    );
     return { tempo: initialTempo, tempoChanges };
   }
 
@@ -447,9 +325,6 @@ export class AccompanimentConverter implements IMIDIConverter {
         ? Number(measures[0]['@_number'])
         : 0;
       const measureOffset = firstMeasureNumber === 0 ? 0 : -1;
-      console.log(
-        `[Timemap] First measure number: ${firstMeasureNumber}, offset: ${measureOffset}`,
-      );
 
       // FIRST PASS: Build maps of time signatures and tempos by measure number
       // Priority: explicit changes > first occurrence's inherited value
@@ -520,22 +395,6 @@ export class AccompanimentConverter implements IMIDIConverter {
         }
       }
 
-      console.log('\n=== ORIGINAL TIME SIGNATURES BY MEASURE NUMBER ===');
-      originalTimeSignatures.forEach((sig, measureNum) => {
-        console.log(
-          `  Measure ${measureNum}: ${sig.beats}/${sig.beatType} ${sig.explicit ? '(EXPLICIT)' : '(inherited)'}`,
-        );
-      });
-      console.log('===\n');
-
-      console.log('=== ORIGINAL TEMPOS BY MEASURE NUMBER ===');
-      originalTempos.forEach((tempo, measureNum) => {
-        console.log(
-          `  Measure ${measureNum}: ${tempo.tempo} BPM ${tempo.explicit ? '(EXPLICIT)' : '(inherited)'}`,
-        );
-      });
-      console.log('===\n');
-
       // SECOND PASS: Generate timemap using original time signatures and tempos
       const tempoChangeLog: Array<{ measure: number; tempo: number }> = [];
 
@@ -568,19 +427,6 @@ export class AccompanimentConverter implements IMIDIConverter {
         const currentTimeBeats = timeSig.beats;
         const currentBeatType = timeSig.beatType;
 
-        const hasExplicitTimeSignature = measure.attributes?.time !== undefined;
-        const hasExplicitTempo = measure.direction
-          ? Array.isArray(measure.direction)
-            ? measure.direction.some((d: any) => d?.sound?.['@_tempo'])
-            : measure.direction.sound?.['@_tempo'] !== undefined
-          : false;
-
-        console.log(
-          `[Timemap Gen] Measure ${i} (num=${measureNumber}): ` +
-            `Time sig ${hasExplicitTimeSignature ? 'EXPLICIT' : 'LOOKUP'} ${currentTimeBeats}/${currentBeatType}, ` +
-            `Tempo ${hasExplicitTempo ? 'EXPLICIT' : 'LOOKUP'} ${currentTempo} BPM`,
-        );
-
         // Calculate measure duration
         let quarterNotes = (currentTimeBeats / currentBeatType) * 4;
         const msPerQuarterNote = 60000 / currentTempo;
@@ -610,9 +456,6 @@ export class AccompanimentConverter implements IMIDIConverter {
 
           // If measure is shorter than expected (typical for pickup), use actual duration
           if (actualQuarters > 0 && actualQuarters < quarterNotes - 0.01) {
-            console.log(
-              `  [PICKUP M${measureNumber}] Actual: ${actualQuarters.toFixed(2)}q vs Expected: ${quarterNotes.toFixed(2)}q - using actual`,
-            );
             quarterNotes = actualQuarters;
           }
         }
@@ -628,41 +471,6 @@ export class AccompanimentConverter implements IMIDIConverter {
 
         currentTime += measureDuration;
       }
-
-      // Log complete timemap for verification
-      console.log('\n=== TIMEMAP GENERATED (All Unrolled Measures) ===');
-      console.log(`Total unrolled measures: ${timemap.length}`);
-      console.log(
-        `Tempo changes with EXPLICIT markers: ${tempoChangeLog.length}`,
-      );
-      tempoChangeLog.forEach((t) =>
-        console.log(`  Measure ${t.measure}: ${t.tempo} BPM`),
-      );
-      console.log(
-        '\n┌──────┬─────────┬──────────┬────────┬──────────┬──────────┐',
-      );
-      console.log(
-        '│ Seq  │ Measure │ Time Sig │  Tempo │ Start(s) │ Dur(s)   │',
-      );
-      console.log(
-        '├──────┼─────────┼──────────┼────────┼──────────┼──────────┤',
-      );
-      timemap.forEach((entry, idx) => {
-        const timeSig = entry.timeSignature || [4, 4];
-        const tempo = originalTempos.get(entry.measure)?.tempo || 120;
-        console.log(
-          `│ ${String(idx).padStart(4, ' ')} │ ` +
-            `${String(entry.measure).padStart(7, ' ')} │ ` +
-            `${String(`${timeSig[0]}/${timeSig[1]}`).padStart(8, ' ')} │ ` +
-            `${String(tempo).padStart(6, ' ')} │ ` +
-            `${String((entry.timestamp / 1000).toFixed(2)).padStart(8, ' ')} │ ` +
-            `${String((entry.duration / 1000).toFixed(2)).padStart(8, ' ')} │`,
-        );
-      });
-      console.log(
-        '└──────┴─────────┴──────────┴────────┴──────────┴──────────┘',
-      );
-      console.log('=== END TIMEMAP ===\n');
     } catch (error) {
       console.error(
         '[AccompanimentConverter] Error generating timemap:',
@@ -813,9 +621,6 @@ export class AccompanimentConverter implements IMIDIConverter {
               (timeSigDurationMs / fullMeasureDuration) * timeSigQuarters;
 
             if (actualQuarters > 0 && actualQuarters < timeSigQuarters - 0.01) {
-              console.log(
-                `[Note Extract M${measureNumber}] Pickup: using ${actualQuarters.toFixed(2)}q instead of ${timeSigQuarters.toFixed(2)}q`,
-              );
               currentMeasureQuarters = actualQuarters;
             }
           }
@@ -1266,10 +1071,6 @@ export class AccompanimentConverter implements IMIDIConverter {
     // Use constant tempo for now to avoid potential hanging issues
     midi.header.setTempo(tempo);
 
-    console.log(
-      `[AccompanimentConverter] MIDI using constant tempo: ${tempo} BPM`,
-    );
-
     if (tempoChanges.length > 0) {
       console.log(
         `[AccompanimentConverter] Note: ${tempoChanges.length} tempo changes detected but not applied to MIDI (using constant ${tempo} BPM)`,
@@ -1285,13 +1086,8 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     const energy = energyMap[this._options.bandEnergy];
 
-    console.log(
-      `[AccompanimentConverter] Creating MIDI with outputMode: ${this._options.outputMode}`,
-    );
-
     // Add original melody track (if not band-only mode)
     if (this._options.outputMode !== 'band-only' && !isPercussion) {
-      console.log('[AccompanimentConverter] Adding melody track');
       const melodyTrack = midi.addTrack();
       melodyTrack.name = 'Melody';
       melodyTrack.channel = 0;
@@ -1304,15 +1100,10 @@ export class AccompanimentConverter implements IMIDIConverter {
           velocity: note.velocity / 127,
         });
       }
-    } else {
-      console.log(
-        '[AccompanimentConverter] Skipping melody track (band-only or percussion)',
-      );
     }
 
     // Add piano track (if not solo-only mode)
     if (this._options.outputMode !== 'solo-only') {
-      console.log('[AccompanimentConverter] Adding piano track');
       const pianoTrack = midi.addTrack();
       pianoTrack.name = 'Piano';
       pianoTrack.channel = 1;
@@ -1389,7 +1180,6 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     // Add bass track (if not solo-only mode)
     if (this._options.outputMode !== 'solo-only') {
-      console.log('[AccompanimentConverter] Adding bass track');
       const bassTrack = midi.addTrack();
       bassTrack.name = 'Bass';
       bassTrack.channel = 2;
@@ -1439,7 +1229,6 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     // Add string pad track (if not solo-only mode)
     if (this._options.outputMode !== 'solo-only') {
-      console.log('[AccompanimentConverter] Adding string pad track');
       const stringsTrack = midi.addTrack();
       stringsTrack.name = 'Strings';
       stringsTrack.channel = 3;
@@ -1510,7 +1299,6 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     // Add drum track (if not solo-only mode)
     if (this._options.outputMode !== 'solo-only') {
-      console.log('[AccompanimentConverter] Adding drum track');
       const drumTrack = midi.addTrack();
       drumTrack.name = 'Drums';
       drumTrack.channel = 9; // Channel 10 (9 in 0-based) for drums

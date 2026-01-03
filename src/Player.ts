@@ -176,7 +176,6 @@ export class Player {
 
       // PHASE 1: Remove fermatas (causes timing issues for metronome and playback)
       let musicXml = removeFermatas(parseResult.musicXml);
-      console.log('[Player] Fermatas removed from MusicXML');
 
       // STEP 2: Unroll only for rendering if requested
       if (options.unroll) {
