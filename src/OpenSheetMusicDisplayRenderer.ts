@@ -134,7 +134,8 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     start: MillisecsTimestamp,
     offset: MillisecsTimestamp,
   ): void {
-    assertIsDefined(this._osmd);
+    // Guard against moveTo being called during file switching when _osmd is destroyed
+    if (!this._osmd) return;
 
     // If we've processed all entries but now receiving a new moveTo call,
     // it means playback has restarted or user clicked - reset the tracking
@@ -243,8 +244,9 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
   onEvent(): void {}
 
   get version(): string {
-    assertIsDefined(this._osmd);
-    return `opensheetmusicdisplay v${this._osmd.Version}`;
+    return this._osmd
+      ? `opensheetmusicdisplay v${this._osmd.Version}`
+      : 'opensheetmusicdisplay (not initialized)';
   }
 
   protected _redraw() {
