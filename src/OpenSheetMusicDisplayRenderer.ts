@@ -136,9 +136,11 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
   ): void {
     assertIsDefined(this._osmd);
 
-    // If we've already processed all timemap entries, stop immediately
+    // If we've processed all entries but now receiving a new moveTo call,
+    // it means playback has restarted or user clicked - reset the tracking
     if (this._processedTimemapEntries.size >= this._timemap.length) {
-      return;
+      console.log('[OSMD] Resetting processed entries for new playback/seek');
+      this._processedTimemapEntries.clear();
     }
 
     // Find which timemap entry this corresponds to and mark it as processed

@@ -35,14 +35,14 @@ describe('Blue Bag Folly - Measure Analysis', () => {
     const endings: { number: string; measure: number; type: string }[] = [];
     const jumps: { type: string; measure: number }[] = [];
 
-    measures.forEach((measure, idx) => {
+    measures.forEach((measure: any, idx: number) => {
       const measureNum = Number(measure['@_number']);
 
       if (measure.barline) {
         const barlines = Array.isArray(measure.barline)
           ? measure.barline
           : [measure.barline];
-        barlines.forEach((barline) => {
+        barlines.forEach((barline: any) => {
           if (barline.repeat) {
             const direction = barline.repeat['@_direction'];
             repeats.push({
@@ -72,7 +72,7 @@ describe('Blue Bag Folly - Measure Analysis', () => {
         const directions = Array.isArray(measure.direction)
           ? measure.direction
           : [measure.direction];
-        directions.forEach((direction) => {
+        directions.forEach((direction: any) => {
           if (direction.sound) {
             if (direction.sound['@_segno']) {
               jumps.push({ type: 'segno', measure: measureNum });
@@ -173,7 +173,6 @@ describe('Blue Bag Folly - Measure Analysis', () => {
     const converter = new AccompanimentConverter();
 
     await converter.initialize(originalXml, {
-      bandEnergy: 'medium',
       outputMode: 'band-only',
       unrollXslUri:
         'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/unroll.sef.json',

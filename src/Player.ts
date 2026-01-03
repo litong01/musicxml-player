@@ -497,7 +497,8 @@ export class Player {
       const midi = BasicMIDI.fromArrayBuffer(midiBuffer);
       const tempo = midi.tempoChanges[0]?.tempo || 120;
       const duration = midi.duration;
-      midiBuffer = addMetronomeTrack(midiBuffer, tempo, duration);
+      const timemap = converter.timemap;
+      midiBuffer = addMetronomeTrack(midiBuffer, tempo, duration, timemap);
     }
 
     const midi = BasicMIDI.fromArrayBuffer(midiBuffer);

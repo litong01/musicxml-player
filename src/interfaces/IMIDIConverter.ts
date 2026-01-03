@@ -8,6 +8,7 @@ export type MeasureTimemapEntry = {
   measure: MeasureIndex;
   timestamp: MillisecsTimestamp;
   duration: MillisecsTimestamp;
+  timeSignature?: [number, number]; // Optional [beats, beatType] e.g., [3, 4] for 3/4
 };
 export type MeasureTimemap = MeasureTimemapEntry[];
 

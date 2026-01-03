@@ -3,6 +3,7 @@ export type MeasureTimemapEntry = {
     measure: MeasureIndex;
     timestamp: MillisecsTimestamp;
     duration: MillisecsTimestamp;
+    timeSignature?: [number, number];
 };
 export type MeasureTimemap = MeasureTimemapEntry[];
 /**

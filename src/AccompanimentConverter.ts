@@ -441,7 +441,93 @@ export class AccompanimentConverter implements IMIDIConverter {
         ? parts[0].measure
         : [parts[0].measure];
 
-      let currentTempo = 120; // Default tempo
+      // FIRST PASS: Build maps of time signatures and tempos by measure number
+      // Priority: explicit changes > first occurrence's inherited value
+      const originalTimeSignatures = new Map<
+        number,
+        { beats: number; beatType: number; explicit: boolean }
+      >();
+      const originalTempos = new Map<
+        number,
+        { tempo: number; explicit: boolean }
+      >();
+      let currentMappedTimeBeats = 4;
+      let currentMappedBeatType = 4;
+      let currentMappedTempo = 120;
+
+      for (let i = 0; i < measures.length; i++) {
+        const measure = measures[i];
+        if (!measure) continue;
+
+        const measureNumber = measure['@_number']
+          ? Number(measure['@_number']) - 1
+          : i;
+
+        // Check if this measure has an explicit time signature
+        const hasExplicitTimeSig = measure.attributes?.time !== undefined;
+        if (hasExplicitTimeSig) {
+          currentMappedTimeBeats = Number(measure.attributes.time.beats);
+          currentMappedBeatType = Number(measure.attributes.time['beat-type']);
+        }
+
+        // Check if this measure has an explicit tempo change
+        let hasExplicitTempo = false;
+        if (measure.direction) {
+          const directions = Array.isArray(measure.direction)
+            ? measure.direction
+            : [measure.direction];
+
+          for (const direction of directions) {
+            if (direction.sound && direction.sound['@_tempo']) {
+              currentMappedTempo = Number(direction.sound['@_tempo']);
+              hasExplicitTempo = true;
+              break;
+            }
+          }
+        }
+
+        const existingTimeSig = originalTimeSignatures.get(measureNumber);
+        const existingTempo = originalTempos.get(measureNumber);
+
+        // Store/update time signature: always if not seen, or if explicit and wasn't before
+        if (
+          !existingTimeSig ||
+          (hasExplicitTimeSig && !existingTimeSig.explicit)
+        ) {
+          originalTimeSignatures.set(measureNumber, {
+            beats: currentMappedTimeBeats,
+            beatType: currentMappedBeatType,
+            explicit: hasExplicitTimeSig,
+          });
+        }
+
+        // Store/update tempo: always if not seen, or if explicit and wasn't before
+        if (!existingTempo || (hasExplicitTempo && !existingTempo.explicit)) {
+          originalTempos.set(measureNumber, {
+            tempo: currentMappedTempo,
+            explicit: hasExplicitTempo,
+          });
+        }
+      }
+
+      console.log('\n=== ORIGINAL TIME SIGNATURES BY MEASURE NUMBER ===');
+      originalTimeSignatures.forEach((sig, measureNum) => {
+        console.log(
+          `  Measure ${measureNum}: ${sig.beats}/${sig.beatType} ${sig.explicit ? '(EXPLICIT)' : '(inherited)'}`,
+        );
+      });
+      console.log('===\n');
+
+      console.log('=== ORIGINAL TEMPOS BY MEASURE NUMBER ===');
+      originalTempos.forEach((tempo, measureNum) => {
+        console.log(
+          `  Measure ${measureNum}: ${tempo.tempo} BPM ${tempo.explicit ? '(EXPLICIT)' : '(inherited)'}`,
+        );
+      });
+      console.log('===\n');
+
+      // SECOND PASS: Generate timemap using original time signatures and tempos
+      const tempoChangeLog: Array<{ measure: number; tempo: number }> = [];
 
       for (let i = 0; i < measures.length; i++) {
         const measure = measures[i];
@@ -452,31 +538,42 @@ export class AccompanimentConverter implements IMIDIConverter {
           ? Number(measure['@_number']) - 1
           : i;
 
-        // Check for tempo change in this measure
-        if (measure.direction) {
-          const directions = Array.isArray(measure.direction)
-            ? measure.direction
-            : [measure.direction];
+        // Look up the original tempo for this measure number
+        const tempoEntry = originalTempos.get(measureNumber) || {
+          tempo: 120,
+          explicit: false,
+        };
+        const currentTempo = tempoEntry.tempo;
 
-          for (const direction of directions) {
-            if (direction.sound && direction.sound['@_tempo']) {
-              currentTempo = Number(direction.sound['@_tempo']);
-              break;
-            }
-          }
+        if (tempoEntry.explicit) {
+          tempoChangeLog.push({ measure: measureNumber, tempo: currentTempo });
         }
 
-        // Get time signature from attributes
-        let timeBeats = 4;
-        let beatType = 4;
-        if (measure.attributes?.time) {
-          timeBeats = Number(measure.attributes.time.beats);
-          beatType = Number(measure.attributes.time['beat-type']);
-        }
+        // Look up the original time signature for this measure number
+        const timeSig = originalTimeSignatures.get(measureNumber) || {
+          beats: 4,
+          beatType: 4,
+          explicit: false,
+        };
+        const currentTimeBeats = timeSig.beats;
+        const currentBeatType = timeSig.beatType;
+
+        const hasExplicitTimeSignature = measure.attributes?.time !== undefined;
+        const hasExplicitTempo = measure.direction
+          ? Array.isArray(measure.direction)
+            ? measure.direction.some((d: any) => d?.sound?.['@_tempo'])
+            : measure.direction.sound?.['@_tempo'] !== undefined
+          : false;
+
+        console.log(
+          `[Timemap Gen] Measure ${i} (num=${measureNumber}): ` +
+            `Time sig ${hasExplicitTimeSignature ? 'EXPLICIT' : 'LOOKUP'} ${currentTimeBeats}/${currentBeatType}, ` +
+            `Tempo ${hasExplicitTempo ? 'EXPLICIT' : 'LOOKUP'} ${currentTempo} BPM`,
+        );
 
         // Calculate measure duration in milliseconds
         // Duration = (beats / beat_type) * 4 quarter notes * (60000ms/tempo)
-        const quarterNotes = (timeBeats / beatType) * 4;
+        const quarterNotes = (currentTimeBeats / currentBeatType) * 4;
         const msPerQuarterNote = 60000 / currentTempo;
         const measureDuration = Math.round(quarterNotes * msPerQuarterNote);
 
@@ -484,10 +581,46 @@ export class AccompanimentConverter implements IMIDIConverter {
           measure: measureNumber,
           timestamp: currentTime,
           duration: measureDuration,
+          timeSignature: [currentTimeBeats, currentBeatType], // Include time signature
         });
 
         currentTime += measureDuration;
       }
+
+      // Log complete timemap for verification
+      console.log('\n=== TIMEMAP GENERATED (All Unrolled Measures) ===');
+      console.log(`Total unrolled measures: ${timemap.length}`);
+      console.log(
+        `Tempo changes with EXPLICIT markers: ${tempoChangeLog.length}`,
+      );
+      tempoChangeLog.forEach((t) =>
+        console.log(`  Measure ${t.measure}: ${t.tempo} BPM`),
+      );
+      console.log(
+        '\n┌──────┬─────────┬──────────┬────────┬──────────┬──────────┐',
+      );
+      console.log(
+        '│ Seq  │ Measure │ Time Sig │  Tempo │ Start(s) │ Dur(s)   │',
+      );
+      console.log(
+        '├──────┼─────────┼──────────┼────────┼──────────┼──────────┤',
+      );
+      timemap.forEach((entry, idx) => {
+        const timeSig = entry.timeSignature || [4, 4];
+        const tempo = originalTempos.get(entry.measure)?.tempo || 120;
+        console.log(
+          `│ ${String(idx).padStart(4, ' ')} │ ` +
+            `${String(entry.measure).padStart(7, ' ')} │ ` +
+            `${String(`${timeSig[0]}/${timeSig[1]}`).padStart(8, ' ')} │ ` +
+            `${String(tempo).padStart(6, ' ')} │ ` +
+            `${String((entry.timestamp / 1000).toFixed(2)).padStart(8, ' ')} │ ` +
+            `${String((entry.duration / 1000).toFixed(2)).padStart(8, ' ')} │`,
+        );
+      });
+      console.log(
+        '└──────┴─────────┴──────────┴────────┴──────────┴──────────┘',
+      );
+      console.log('=== END TIMEMAP ===\n');
     } catch (error) {
       console.error(
         '[AccompanimentConverter] Error generating timemap:',
@@ -549,6 +682,42 @@ export class AccompanimentConverter implements IMIDIConverter {
           ? part.measure
           : [part.measure];
 
+        // FIRST PASS: Build a map of time signatures by measure number
+        // Priority: explicit time signature changes > first occurrence's inherited value
+        const originalMeasureQuarters = new Map<
+          number,
+          { quarters: number; explicit: boolean }
+        >();
+        let currentMappedQuarters = 4;
+
+        for (let i = 0; i < partMeasures.length; i++) {
+          const measure = partMeasures[i];
+          if (!measure) continue;
+
+          const measureNumber = measure['@_number']
+            ? Number(measure['@_number']) - 1
+            : i;
+
+          // Check if this measure has an explicit time signature
+          const hasExplicitTimeSig = measure.attributes?.time !== undefined;
+          if (hasExplicitTimeSig) {
+            const timeBeats = Number(measure.attributes.time.beats);
+            const beatType = Number(measure.attributes.time['beat-type']);
+            currentMappedQuarters = (timeBeats / beatType) * 4;
+          }
+
+          const existing = originalMeasureQuarters.get(measureNumber);
+
+          // Store/update: always if not seen, or if we have explicit and didn't before
+          if (!existing || (hasExplicitTimeSig && !existing.explicit)) {
+            originalMeasureQuarters.set(measureNumber, {
+              quarters: currentMappedQuarters,
+              explicit: hasExplicitTimeSig,
+            });
+          }
+        }
+
+        // SECOND PASS: Extract notes using original time signatures
         for (let i = 0; i < partMeasures.length; i++) {
           const measure = partMeasures[i];
           if (!measure) continue;
@@ -565,18 +734,21 @@ export class AccompanimentConverter implements IMIDIConverter {
           const measureStartTime = timemapEntry.timestamp / 1000; // Convert ms to seconds
           const measureDuration = timemapEntry.duration / 1000; // Convert ms to seconds
 
+          // Get measure number
+          const measureNumber = measure['@_number']
+            ? Number(measure['@_number']) - 1
+            : i;
+
           // Get divisions from attributes
           if (measure.attributes?.divisions) {
             divisions = Number(measure.attributes.divisions);
           }
 
-          // Get measure duration in quarter notes from time signature or default to 4
-          let measureQuarters = 4;
-          if (measure.attributes?.time) {
-            const timeBeats = Number(measure.attributes.time.beats);
-            const beatType = Number(measure.attributes.time['beat-type']);
-            measureQuarters = (timeBeats / beatType) * 4; // Convert to quarter notes
-          }
+          // Look up the original measure duration for this measure number
+          const measureQuartersEntry = originalMeasureQuarters.get(
+            measureNumber,
+          ) || { quarters: 4, explicit: false };
+          const currentMeasureQuarters = measureQuartersEntry.quarters;
 
           // Track position within measure (in quarter notes)
           let positionInMeasure = 0;
@@ -599,13 +771,19 @@ export class AccompanimentConverter implements IMIDIConverter {
                 ? Number(note.duration) / divisions
                 : 1;
 
+              // Skip rests FIRST before any pitch processing
+              if (note.rest !== undefined) {
+                positionInMeasure += duration;
+                continue;
+              }
+
               // Calculate note time based on timemap timing
               // Map the note's position within the measure to actual time
               const noteTime =
                 measureStartTime +
-                (positionInMeasure / measureQuarters) * measureDuration;
+                (positionInMeasure / currentMeasureQuarters) * measureDuration;
               const noteDurationInSeconds =
-                (duration / measureQuarters) * measureDuration;
+                (duration / currentMeasureQuarters) * measureDuration;
 
               // Get pitch
               let pitch = 60; // Default middle C
@@ -629,10 +807,6 @@ export class AccompanimentConverter implements IMIDIConverter {
               } else if (note.unpitched) {
                 // For unpitched percussion, use a generic note
                 pitch = 60;
-              } else if (note.rest) {
-                // Skip rests but advance position
-                positionInMeasure += duration;
-                continue;
               }
 
               notes.push({
@@ -860,7 +1034,7 @@ export class AccompanimentConverter implements IMIDIConverter {
    */
   private _createMidiWithAccompaniment(
     melodyNotes: Note[],
-    chords: Chord[],
+    _chords: Chord[],
     tempo: number,
     tempoChanges: Array<{ time: number; bpm: number; measure: number }>,
     isPercussion: boolean,
@@ -887,7 +1061,7 @@ export class AccompanimentConverter implements IMIDIConverter {
       strong: { piano: 0.85, bass: 0.9, strings: 0.75, brass: 0.9, drums: 0.8 },
     };
 
-    const energy = energyMap[this._options.bandEnergy];
+    const _energy = energyMap[this._options.bandEnergy];
 
     // Add original melody track (if not band-only mode)
     if (this._options.outputMode !== 'band-only' && !isPercussion) {
@@ -906,163 +1080,168 @@ export class AccompanimentConverter implements IMIDIConverter {
     }
 
     // Add piano track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
-      const pianoTrack = midi.addTrack();
-      pianoTrack.name = 'Piano';
-      pianoTrack.channel = 1;
-      pianoTrack.instrument.number = 0; // Acoustic Grand Piano
+    // DISABLED: Focus on metronome fixes first
+    // if (this._options.outputMode !== 'solo-only') {
+    //   const pianoTrack = midi.addTrack();
+    //   pianoTrack.name = 'Piano';
+    //   pianoTrack.channel = 1;
+    //   pianoTrack.instrument.number = 0; // Acoustic Grand Piano
 
-      for (const chord of chords) {
-        const voicing = this._getChordVoicing(chord);
-        const velocity = 60 * energy.piano;
+    //   for (const chord of chords) {
+    //     const voicing = this._getChordVoicing(chord);
+    //     const velocity = 60 * energy.piano;
 
-        for (const pitch of voicing) {
-          pianoTrack.addNote({
-            midi: pitch,
-            time: chord.time,
-            duration: chord.duration * 0.9, // Slight staccato
-            velocity: velocity / 127,
-          });
-        }
-      }
-    }
+    //     for (const pitch of voicing) {
+    //       pianoTrack.addNote({
+    //         midi: pitch,
+    //         time: chord.time,
+    //         duration: chord.duration * 0.9, // Slight staccato
+    //         velocity: velocity / 127,
+    //       });
+    //     }
+    //   }
+    // }
 
     // Add bass track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
-      const bassTrack = midi.addTrack();
-      bassTrack.name = 'Bass';
-      bassTrack.channel = 2;
-      bassTrack.instrument.number = 32; // Acoustic Bass
+    // DISABLED: Focus on metronome fixes first
+    // if (this._options.outputMode !== 'solo-only') {
+    //   const bassTrack = midi.addTrack();
+    //   bassTrack.name = 'Bass';
+    //   bassTrack.channel = 2;
+    //   bassTrack.instrument.number = 32; // Acoustic Bass
 
-      for (const chord of chords) {
-        const bassNote = 36 + chord.root; // Bass octave
-        const velocity = 70 * energy.bass;
+    //   for (const chord of chords) {
+    //     const bassNote = 36 + chord.root; // Bass octave
+    //     const velocity = 70 * energy.bass;
 
-        bassTrack.addNote({
-          midi: bassNote,
-          time: chord.time,
-          duration: chord.duration * 0.8,
-          velocity: velocity / 127,
-        });
+    //     bassTrack.addNote({
+    //       midi: bassNote,
+    //       time: chord.time,
+    //       duration: chord.duration * 0.8,
+    //       velocity: velocity / 127,
+    //     });
 
-        // Add fifth for more fullness
-        const beatDuration = 60 / tempo;
-        if (chord.duration >= beatDuration * 2) {
-          bassTrack.addNote({
-            midi: bassNote + 7, // Fifth
-            time: chord.time + beatDuration,
-            duration: beatDuration * 0.8,
-            velocity: (velocity * 0.8) / 127,
-          });
-        }
-      }
-    }
+    //     // Add fifth for more fullness
+    //     const beatDuration = 60 / tempo;
+    //     if (chord.duration >= beatDuration * 2) {
+    //       bassTrack.addNote({
+    //         midi: bassNote + 7, // Fifth
+    //         time: chord.time + beatDuration,
+    //         duration: beatDuration * 0.8,
+    //         velocity: (velocity * 0.8) / 127,
+    //       });
+    //     }
+    //   }
+    // }
 
     // Add string pad track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
-      const stringsTrack = midi.addTrack();
-      stringsTrack.name = 'Strings';
-      stringsTrack.channel = 3;
-      stringsTrack.instrument.number = 48; // String Ensemble 1
+    // DISABLED: Focus on metronome fixes first
+    // if (this._options.outputMode !== 'solo-only') {
+    //   const stringsTrack = midi.addTrack();
+    //   stringsTrack.name = 'Strings';
+    //   stringsTrack.channel = 3;
+    //   stringsTrack.instrument.number = 48; // String Ensemble 1
 
-      for (const chord of chords) {
-        const voicing = this._getChordVoicing(chord);
-        const velocity = 50 * energy.strings; // Softer than piano for pad effect
+    //   for (const chord of chords) {
+    //     const voicing = this._getChordVoicing(chord);
+    //     const velocity = 50 * energy.strings; // Softer than piano for pad effect
 
-        for (const pitch of voicing) {
-          stringsTrack.addNote({
-            midi: pitch,
-            time: chord.time,
-            duration: chord.duration, // Full sustain for pad
-            velocity: velocity / 127,
-          });
-        }
-      }
-    }
+    //     for (const pitch of voicing) {
+    //       stringsTrack.addNote({
+    //         midi: pitch,
+    //         time: chord.time,
+    //         duration: chord.duration, // Full sustain for pad
+    //         velocity: velocity / 127,
+    //       });
+    //     }
+    //   }
+    // }
 
     // Add brass section track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
-      const brassTrack = midi.addTrack();
-      brassTrack.name = 'Brass';
-      brassTrack.channel = 4;
-      brassTrack.instrument.number = 61; // Brass Section
+    // DISABLED: Focus on metronome fixes first
+    // if (this._options.outputMode !== 'solo-only') {
+    //   const brassTrack = midi.addTrack();
+    //   brassTrack.name = 'Brass';
+    //   brassTrack.channel = 4;
+    //   brassTrack.instrument.number = 61; // Brass Section
 
-      const beatDuration = 60 / tempo;
+    //   const beatDuration = 60 / tempo;
 
-      for (const chord of chords) {
-        const voicing = this._getChordVoicing(chord);
-        const velocity = 75 * energy.brass;
+    //   for (const chord of chords) {
+    //     const voicing = this._getChordVoicing(chord);
+    //     const velocity = 75 * energy.brass;
 
-        // Play on strong beats (1 and 3 of a 4-beat measure)
-        const beatInMeasure = Math.floor(chord.time / beatDuration) % 4;
-        const isStrongBeat = beatInMeasure === 0 || beatInMeasure === 2;
+    //     // Play on strong beats (1 and 3 of a 4-beat measure)
+    //     const beatInMeasure = Math.floor(chord.time / beatDuration) % 4;
+    //     const isStrongBeat = beatInMeasure === 0 || beatInMeasure === 2;
 
-        if (isStrongBeat) {
-          for (const pitch of voicing) {
-            brassTrack.addNote({
-              midi: pitch,
-              time: chord.time,
-              duration: chord.duration * 0.6, // Punchy, not too long
-              velocity: velocity / 127,
-            });
-          }
-        }
-      }
-    }
+    //     if (isStrongBeat) {
+    //       for (const pitch of voicing) {
+    //         brassTrack.addNote({
+    //           midi: pitch,
+    //           time: chord.time,
+    //           duration: chord.duration * 0.6, // Punchy, not too long
+    //           velocity: velocity / 127,
+    //         });
+    //       }
+    //     }
+    //   }
+    // }
 
     // Add drum track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
-      const drumTrack = midi.addTrack();
-      drumTrack.name = 'Drums';
-      drumTrack.channel = 9; // Channel 10 (9 in 0-based) for drums
+    // DISABLED: Focus on metronome fixes first
+    // if (this._options.outputMode !== 'solo-only') {
+    //   const drumTrack = midi.addTrack();
+    //   drumTrack.name = 'Drums';
+    //   drumTrack.channel = 9; // Channel 10 (9 in 0-based) for drums
 
-      const beatDuration = 60 / tempo;
+    //   const beatDuration = 60 / tempo;
 
-      // Calculate total duration from both melody and chords to ensure full coverage
-      const melodyEndTime =
-        melodyNotes.length > 0
-          ? melodyNotes[melodyNotes.length - 1].time +
-            melodyNotes[melodyNotes.length - 1].duration
-          : 0;
-      const chordEndTime =
-        chords.length > 0
-          ? chords[chords.length - 1].time + chords[chords.length - 1].duration
-          : 0;
-      const totalDuration = Math.max(melodyEndTime, chordEndTime);
+    //   // Calculate total duration from both melody and chords to ensure full coverage
+    //   const melodyEndTime =
+    //     melodyNotes.length > 0
+    //       ? melodyNotes[melodyNotes.length - 1].time +
+    //         melodyNotes[melodyNotes.length - 1].duration
+    //       : 0;
+    //   const chordEndTime =
+    //     chords.length > 0
+    //       ? chords[chords.length - 1].time + chords[chords.length - 1].duration
+    //       : 0;
+    //   const totalDuration = Math.max(melodyEndTime, chordEndTime);
 
-      for (let time = 0; time < totalDuration; time += beatDuration) {
-        const beat = Math.floor(time / beatDuration) % 4;
-        const velocity = 80 * energy.drums;
+    //   for (let time = 0; time < totalDuration; time += beatDuration) {
+    //     const beat = Math.floor(time / beatDuration) % 4;
+    //     const velocity = 80 * energy.drums;
 
-        // Kick drum on beats 1 and 3
-        if (beat === 0 || beat === 2) {
-          drumTrack.addNote({
-            midi: 36, // Bass Drum 1
-            time,
-            duration: beatDuration * 0.3,
-            velocity: velocity / 127,
-          });
-        }
+    //     // Kick drum on beats 1 and 3
+    //     if (beat === 0 || beat === 2) {
+    //       drumTrack.addNote({
+    //         midi: 36, // Bass Drum 1
+    //         time,
+    //         duration: beatDuration * 0.3,
+    //         velocity: velocity / 127,
+    //       });
+    //     }
 
-        // Snare on beats 2 and 4
-        if (beat === 1 || beat === 3) {
-          drumTrack.addNote({
-            midi: 38, // Acoustic Snare
-            time,
-            duration: beatDuration * 0.3,
-            velocity: (velocity * 0.9) / 127,
-          });
-        }
+    //     // Snare on beats 2 and 4
+    //     if (beat === 1 || beat === 3) {
+    //       drumTrack.addNote({
+    //         midi: 38, // Acoustic Snare
+    //         time,
+    //         duration: beatDuration * 0.3,
+    //         velocity: (velocity * 0.9) / 127,
+    //       });
+    //     }
 
-        // Hi-hat on every beat
-        drumTrack.addNote({
-          midi: 42, // Closed Hi-Hat
-          time,
-          duration: beatDuration * 0.2,
-          velocity: (velocity * 0.6) / 127,
-        });
-      }
-    }
+    //     // Hi-hat on every beat
+    //     drumTrack.addNote({
+    //       midi: 42, // Closed Hi-Hat
+    //       time,
+    //       duration: beatDuration * 0.2,
+    //       velocity: (velocity * 0.6) / 127,
+    //     });
+    //   }
+    // }
 
     // Convert to ArrayBuffer
     const midiArray = midi.toArray();
