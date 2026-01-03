@@ -1388,36 +1388,54 @@ export class AccompanimentConverter implements IMIDIConverter {
     }
 
     // Add bass track (if not solo-only mode)
-    // DISABLED: Focus on metronome fixes first
-    // if (this._options.outputMode !== 'solo-only') {
-    //   const bassTrack = midi.addTrack();
-    //   bassTrack.name = 'Bass';
-    //   bassTrack.channel = 2;
-    //   bassTrack.instrument.number = 32; // Acoustic Bass
+    if (this._options.outputMode !== 'solo-only') {
+      console.log('[AccompanimentConverter] Adding bass track');
+      const bassTrack = midi.addTrack();
+      bassTrack.name = 'Bass';
+      bassTrack.channel = 2;
+      bassTrack.instrument.number = 32; // Acoustic Bass
 
-    //   for (const chord of chords) {
-    //     const bassNote = 36 + chord.root; // Bass octave
-    //     const velocity = 70 * energy.bass;
+      for (const chord of chords) {
+        const bassNote = 36 + (chord.root % 12); // Bass octave (E1-D#2 range)
+        const baseVelocity = 70 * energy.bass;
 
-    //     bassTrack.addNote({
-    //       midi: bassNote,
-    //       time: chord.time,
-    //       duration: chord.duration * 0.8,
-    //       velocity: velocity / 127,
-    //     });
+        // Walking bass pattern for more interesting movement
+        // Root on beat 1
+        bassTrack.addNote({
+          midi: bassNote,
+          time: chord.time,
+          duration: chord.duration * 0.45,
+          velocity: baseVelocity / 127,
+        });
 
-    //     // Add fifth for more fullness
-    //     const beatDuration = 60 / tempo;
-    //     if (chord.duration >= beatDuration * 2) {
-    //       bassTrack.addNote({
-    //         midi: bassNote + 7, // Fifth
-    //         time: chord.time + beatDuration,
-    //         duration: beatDuration * 0.8,
-    //         velocity: (velocity * 0.8) / 127,
-    //       });
-    //     }
-    //   }
-    // }
+        // Add walking notes if measure is long enough
+        if (chord.duration > 0.8) {
+          // Fifth on beat 2 or 3 (depending on measure length)
+          const fifthTime = chord.time + chord.duration * 0.5;
+          const fifthNote = bassNote + 7; // Perfect fifth
+
+          bassTrack.addNote({
+            midi: fifthNote,
+            time: fifthTime,
+            duration: chord.duration * 0.35,
+            velocity: (baseVelocity * 0.85) / 127,
+          });
+
+          // Octave or approach note before next chord
+          if (chord.duration > 1.2) {
+            const approachTime = chord.time + chord.duration * 0.75;
+            const approachNote = bassNote + 12; // Octave up
+
+            bassTrack.addNote({
+              midi: approachNote,
+              time: approachTime,
+              duration: chord.duration * 0.2,
+              velocity: (baseVelocity * 0.75) / 127,
+            });
+          }
+        }
+      }
+    }
 
     // Add string pad track (if not solo-only mode)
     // DISABLED: Focus on metronome fixes first
