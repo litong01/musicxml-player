@@ -187,7 +187,8 @@ async function createPlayer() {
   console.log('[createPlayer] Final renderer after checks:', renderer);
   document.getElementById(`renderer-${renderer}`).checked = true;
 
-  // Auto-detect converter: prefer custom MIDI if available, otherwise use AccompanimentConverter
+  // Auto-detect converter: prefer custom MIDI if available for solo-only mode,
+  // otherwise use AccompanimentConverter (which handles all modes)
   let hasMidiFile = false;
 
   // Check if custom MIDI file exists in data directory (skip for external URLs)
@@ -195,26 +196,32 @@ async function createPlayer() {
     .replace(/\.(musicxml|mxl|xml)$/i, '')
     .replace(/^data\//, '');
 
-  // Check for existing MIDI files
-  // Note: We only check for .mid files on the server, not IndexedDB cache,
-  // because cached MIDI doesn't account for accompaniment mode changes
-  if (baseName !== 'remote-file') {
+  // Only check for existing MIDI files if in solo-only mode
+  // For band modes, we always need to generate with AccompanimentConverter
+  if (baseName !== 'remote-file' && g_state.accompanimentMode === 'solo-only') {
     try {
       const midiPath = base.replace(/\.\w+$/, '.mid');
       await fetish(midiPath, { method: 'HEAD' });
       hasMidiFile = true;
-      console.log('[createPlayer] Found .mid file on server:', midiPath);
+      console.log(
+        '[createPlayer] Found .mid file on server (solo-only mode):',
+        midiPath,
+      );
     } catch {
       // No .mid file on server - will use AccompanimentConverter
       console.log(
         '[createPlayer] No .mid file found, will generate with AccompanimentConverter',
       );
     }
+  } else if (g_state.accompanimentMode !== 'solo-only') {
+    console.log(
+      '[createPlayer] Band mode active - will use AccompanimentConverter',
+    );
   }
 
-  // Choose converter: use cached MIDI if available, otherwise generate with AccompanimentConverter
-  if (hasMidiFile) {
-    // Use existing MIDI file
+  // Choose converter: use cached MIDI only for solo-only mode, otherwise generate with AccompanimentConverter
+  if (hasMidiFile && g_state.accompanimentMode === 'solo-only') {
+    // Use existing MIDI file for solo-only mode
     converter = 'midi';
     console.log('[createPlayer] Using MIDI converter (cached MIDI file found)');
   } else {

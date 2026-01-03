@@ -221,6 +221,7 @@ export class AccompanimentConverter implements IMIDIConverter {
       keySignature,
       isPercussion,
       tempo,
+      this._timemap,
     );
 
     // Create MIDI with accompaniment
@@ -940,6 +941,7 @@ export class AccompanimentConverter implements IMIDIConverter {
     keyFifths: number,
     isPercussion: boolean,
     tempo: number,
+    timemap: MeasureTimemap,
   ): Chord[] {
     const chords: Chord[] = [];
 
@@ -968,43 +970,132 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     // If percussion, generate a simple I-V-vi-IV progression
     if (isPercussion) {
-      const totalDuration =
-        notes.length > 0
-          ? notes[notes.length - 1].time + notes[notes.length - 1].duration
-          : 0;
-      const chordDuration = (4 * 60) / tempo; // 4 beats
+      // Use timemap for measure-based chord generation
+      if (timemap && timemap.length > 0) {
+        timemap.forEach((measure, index) => {
+          const chordIndex = index % 4;
+          let root = keyRoot;
+          let type: Chord['type'] = 'major';
 
-      for (let time = 0; time < totalDuration; time += chordDuration) {
-        const chordIndex = Math.floor(time / chordDuration) % 4;
-        let root = keyRoot;
-        let type: Chord['type'] = 'major';
+          switch (chordIndex) {
+            case 0:
+              root = keyRoot; // I
+              type = 'major';
+              break;
+            case 1:
+              root = (keyRoot + 7) % 12; // V
+              type = 'major';
+              break;
+            case 2:
+              root = (keyRoot + 9) % 12; // vi
+              type = 'minor';
+              break;
+            case 3:
+              root = (keyRoot + 5) % 12; // IV
+              type = 'major';
+              break;
+          }
 
-        switch (chordIndex) {
-          case 0:
-            root = keyRoot; // I
-            type = 'major';
-            break;
-          case 1:
-            root = (keyRoot + 7) % 12; // V
-            type = 'major';
-            break;
-          case 2:
-            root = (keyRoot + 9) % 12; // vi
-            type = 'minor';
-            break;
-          case 3:
-            root = (keyRoot + 5) % 12; // IV
-            type = 'major';
-            break;
+          chords.push({
+            root,
+            type,
+            time: measure.timestamp / 1000,
+            duration: measure.duration / 1000,
+          });
+        });
+      } else {
+        // Fallback to fixed duration if no timemap
+        const totalDuration =
+          notes.length > 0
+            ? notes[notes.length - 1].time + notes[notes.length - 1].duration
+            : 0;
+        const chordDuration = (4 * 60) / tempo; // 4 beats
+
+        for (let time = 0; time < totalDuration; time += chordDuration) {
+          const chordIndex = Math.floor(time / chordDuration) % 4;
+          let root = keyRoot;
+          let type: Chord['type'] = 'major';
+
+          switch (chordIndex) {
+            case 0:
+              root = keyRoot; // I
+              type = 'major';
+              break;
+            case 1:
+              root = (keyRoot + 7) % 12; // V
+              type = 'major';
+              break;
+            case 2:
+              root = (keyRoot + 9) % 12; // vi
+              type = 'minor';
+              break;
+            case 3:
+              root = (keyRoot + 5) % 12; // IV
+              type = 'major';
+              break;
+          }
+
+          chords.push({ root, type, time, duration: chordDuration });
         }
-
-        chords.push({ root, type, time, duration: chordDuration });
       }
 
       return chords;
     }
 
     // For melodic content, analyze notes to infer chords
+    // Use timemap for measure-based chord generation if available
+    if (timemap && timemap.length > 0) {
+      // Generate chords per measure
+      timemap.forEach((measure) => {
+        const measureStart = measure.timestamp / 1000;
+        const measureDuration = measure.duration / 1000;
+
+        // Find notes in this measure
+        const measureNotes = notes.filter(
+          (n) =>
+            n.time >= measureStart && n.time < measureStart + measureDuration,
+        );
+
+        if (measureNotes.length === 0) {
+          // Use the previous chord or default to I
+          if (chords.length > 0) {
+            const prev = chords[chords.length - 1];
+            chords.push({
+              ...prev,
+              time: measureStart,
+              duration: measureDuration,
+            });
+          } else {
+            chords.push({
+              root: keyRoot,
+              type: 'major',
+              time: measureStart,
+              duration: measureDuration,
+            });
+          }
+          return;
+        }
+
+        // Analyze note pitches to determine chord
+        const pitchClasses = measureNotes.map((n) => n.pitch % 12);
+        const uniquePitches = Array.from(new Set(pitchClasses));
+
+        // Simple chord inference: use most common note as root
+        const root = this._findMostLikelyRoot(uniquePitches, keyRoot);
+        const type = this._inferChordType(uniquePitches, root);
+
+        chords.push({
+          root,
+          type,
+          time: measureStart,
+          duration: measureDuration,
+        });
+      });
+
+      return chords;
+    }
+
+    // Fallback: use fixed duration if no timemap
     const chordDuration = (2 * 60) / tempo; // 2 beats per chord
     const totalDuration =
       notes.length > 0
@@ -1045,6 +1136,68 @@ export class AccompanimentConverter implements IMIDIConverter {
     }
 
     return chords;
+  }
+
+  /**
+   * Get the 7th interval for a chord type
+   */
+  private _get7thInterval(type: Chord['type']): number | null {
+    switch (type) {
+      case 'major':
+        return 11; // Major 7th
+      case 'minor':
+        return 10; // Minor 7th
+      case 'dominant7':
+        return 10; // Minor 7th
+      case 'diminished':
+        return 9; // Diminished 7th
+      default:
+        return 11; // Default to major 7th
+    }
+  }
+
+  /**
+   * Choose chord voicing that minimizes movement from previous voicing
+   */
+  private _getSmootherVoicing(
+    currentVoicing: number[],
+    previousVoicing: number[],
+  ): number[] {
+    if (previousVoicing.length === 0) return currentVoicing;
+
+    // Try different inversions and pick the one with minimal total movement
+    const inversions: number[][] = [currentVoicing];
+
+    // Generate inversions by moving lowest note up an octave
+    for (let i = 1; i < currentVoicing.length; i++) {
+      const inverted = [...currentVoicing];
+      for (let j = 0; j < i; j++) {
+        inverted[j] = inverted[j] + 12; // Move up an octave
+      }
+      inverted.sort((a, b) => a - b); // Re-sort
+      inversions.push(inverted);
+    }
+
+    // Find inversion with minimal movement
+    let bestInversion = currentVoicing;
+    let minMovement = Infinity;
+
+    for (const inversion of inversions) {
+      let totalMovement = 0;
+      for (
+        let i = 0;
+        i < Math.min(inversion.length, previousVoicing.length);
+        i++
+      ) {
+        totalMovement += Math.abs(inversion[i] - previousVoicing[i]);
+      }
+      if (totalMovement < minMovement) {
+        minMovement = totalMovement;
+        bestInversion = inversion;
+      }
+    }
+
+    return bestInversion;
   }
 
   /**
@@ -1165,16 +1318,70 @@ export class AccompanimentConverter implements IMIDIConverter {
       pianoTrack.channel = 1;
       pianoTrack.instrument.number = 0; // Acoustic Grand Piano
 
-      for (const chord of chords) {
-        const voicing = this._getChordVoicing(chord);
-        const velocity = 60 * energy.piano;
+      let previousVoicing: number[] = [];
 
-        for (const pitch of voicing) {
+      for (let i = 0; i < chords.length; i++) {
+        const chord = chords[i];
+        let voicing = this._getChordVoicing(chord);
+
+        // Add 7th for richer harmony (concert piano sound)
+        const seventh = this._get7thInterval(chord.type);
+        if (seventh !== null) {
+          const seventhPitch = chord.root + seventh + 12 * 4; // Add in upper register
+          voicing.push(seventhPitch);
+        }
+
+        // Use voice leading: choose inversion that minimizes movement
+        if (previousVoicing.length > 0) {
+          voicing = this._getSmootherVoicing(voicing, previousVoicing);
+        }
+        previousVoicing = voicing;
+
+        const baseVelocity = 60 * energy.piano;
+
+        // Skip the bass note (leave for bass track), use mid-to-upper range
+        const midVoicing = voicing.slice(1);
+
+        // Pattern: Broken chord arpeggio
+        midVoicing.forEach((pitch, index) => {
+          // Humanize velocity (slight random variation)
+          const velocityVariation = 0.9 + Math.random() * 0.2; // 90%-110%
+          const noteVelocity = (baseVelocity * velocityVariation) / 127;
+
+          // Arpeggio timing - stagger each note slightly
+          const arpeggioDelay = index * 0.02; // 20ms stagger
+          const noteTime = chord.time + arpeggioDelay;
+
+          // First arpeggio sweep
           pianoTrack.addNote({
             midi: pitch,
+            time: noteTime,
+            duration: chord.duration * 0.5, // Overlap for pedal effect
+            velocity: noteVelocity,
+          });
+
+          // Second sweep (if measure is long enough)
+          if (chord.duration > 1.0) {
+            const secondSweepTime =
+              chord.time + chord.duration * 0.5 + arpeggioDelay;
+            pianoTrack.addNote({
+              midi: pitch,
+              time: secondSweepTime,
+              duration: chord.duration * 0.45,
+              velocity: noteVelocity * 0.85, // Slightly softer
+            });
+          }
+        });
+
+        // Add occasional bass octave doubling for fuller sound
+        if (i % 2 === 0 && voicing.length > 0) {
+          const bassNote = voicing[0];
+          const bassOctave = bassNote - 12; // One octave lower
+          pianoTrack.addNote({
+            midi: bassOctave,
             time: chord.time,
-            duration: chord.duration * 0.9, // Slight staccato
-            velocity: velocity / 127,
+            duration: chord.duration * 0.4,
+            velocity: (baseVelocity * 1.1) / 127, // Slightly stronger
           });
         }
       }

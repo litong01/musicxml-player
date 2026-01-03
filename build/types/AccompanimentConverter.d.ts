@@ -47,6 +47,14 @@ export declare class AccompanimentConverter implements IMIDIConverter {
      */
     private _generateChords;
     /**
+     * Get the 7th interval for a chord type
+     */
+    private _get7thInterval;
+    /**
+     * Choose chord voicing that minimizes movement from previous voicing
+     */
+    private _getSmootherVoicing;
+    /**
      * Find most likely chord root from a set of pitch classes
      */
     private _findMostLikelyRoot;
