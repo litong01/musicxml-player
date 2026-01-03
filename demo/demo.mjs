@@ -119,6 +119,7 @@ async function createPlayer() {
   const sheet = g_state.params.get('sheet');
   const output = g_state.params.get('output') ?? DEFAULT_OUTPUT;
   let renderer = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
+  console.log('[createPlayer] Initial renderer from params:', renderer);
   const groove = g_state.params.get('groove') ?? DEFAULT_GROOVE;
   let converter = g_state.params.get('converter') ?? DEFAULT_CONVERTER;
   const velocity = g_state.params.get('velocity') ?? DEFAULT_VELOCITY;
@@ -175,10 +176,14 @@ async function createPlayer() {
     } catch {
       input.disabled = true;
       if (renderer === k) {
+        console.log(
+          `[createPlayer] Renderer ${k} is disabled, resetting to ${DEFAULT_RENDERER}`,
+        );
         renderer = DEFAULT_RENDERER;
       }
     }
   }
+  console.log('[createPlayer] Final renderer after checks:', renderer);
   document.getElementById(`renderer-${renderer}`).checked = true;
 
   // Auto-detect converter: prefer custom MIDI if available, otherwise generate
@@ -328,10 +333,8 @@ async function createRenderer(renderer, sheet, options) {
         justificationBracketGroup: 5,
         scale: 60,
       };
-      if (options.showMeasureNumbers) {
-        vrvOptions.barNumbers = 'system';
-        vrvOptions.barNumbersInterval = 0;
-      }
+      // Note: Verovio's measure number display options may vary by version
+      // The options barNumbers and barNumbersInterval are not supported in current version
       return new VerovioRenderer(vrvOptions);
     case 'mscore':
       document.querySelectorAll('.renderer-option').forEach((element) => {
@@ -460,10 +463,18 @@ function handleSettingsOpen() {
     options: { ...g_state.options },
   };
 
-  // Set the appropriate radio button
+  // Set the appropriate music source radio button
   const sourceRadios = document.querySelectorAll('input[name="music-source"]');
   sourceRadios.forEach((radio) => {
     if (radio.value === currentSource) {
+      radio.checked = true;
+    }
+  });
+
+  // Set the renderer radio buttons
+  const rendererRadios = document.querySelectorAll('input[name="renderer"]');
+  rendererRadios.forEach((radio) => {
+    if (radio.value === currentRenderer) {
       radio.checked = true;
     }
   });
@@ -512,13 +523,42 @@ async function handleApplySettings() {
 
   const settings = g_state.pendingSettings;
 
+  // Track what changed to determine if we need to reload
+  const rendererChanged = settings.renderer !== g_state.params.get('renderer');
+  const accompanimentChanged =
+    settings.accompanimentMode !== g_state.accompanimentMode;
+
+  console.log(
+    '[handleApplySettings] Current renderer:',
+    g_state.params.get('renderer'),
+  );
+  console.log('[handleApplySettings] Settings renderer:', settings.renderer);
+  console.log('[handleApplySettings] Renderer changed:', rendererChanged);
+
+  // Check if any renderer options changed (these require reload)
+  const currentOptions = g_state.options;
+  const metronomeChanged =
+    settings.options.metronome !== currentOptions.metronome;
+  const respectLineBreaksChanged =
+    settings.options.respectLineBreaks !== currentOptions.respectLineBreaks;
+  const showMeasureNumbersChanged =
+    settings.options.showMeasureNumbers !== currentOptions.showMeasureNumbers;
+  const renderOptionsChanged =
+    metronomeChanged || respectLineBreaksChanged || showMeasureNumbersChanged;
+
   // Apply renderer
-  if (settings.renderer !== g_state.params.get('renderer')) {
+  if (rendererChanged) {
+    console.log(
+      '[handleApplySettings] Setting renderer to:',
+      settings.renderer,
+    );
     g_state.params.set('renderer', settings.renderer);
+    // Set flag to prevent handlers from overriding renderer
+    g_state.settingsAppliedRenderer = true;
   }
 
   // Apply accompaniment mode
-  if (settings.accompanimentMode !== g_state.accompanimentMode) {
+  if (accompanimentChanged) {
     g_state.accompanimentMode = settings.accompanimentMode;
     savePlayerOptions();
   }
@@ -527,16 +567,28 @@ async function handleApplySettings() {
   g_state.options = { ...settings.options };
   savePlayerOptions();
 
-  // Apply velocity and repeat if they were changed
+  // Apply velocity and repeat to existing player if it exists (these can be changed without reload)
   if (settings.velocity !== undefined) {
     g_state.params.set('velocity', settings.velocity);
+    if (g_state.player) {
+      g_state.player.velocity = Number(settings.velocity);
+    }
   }
   if (settings.repeat !== undefined) {
     g_state.params.set('repeat', settings.repeat);
+    if (g_state.player) {
+      g_state.player.repeat =
+        settings.repeat === '-1' ? Infinity : Number(settings.repeat);
+    }
+  }
+
+  // Apply mute to existing player if it exists (can be changed without reload)
+  if (g_state.player) {
+    g_state.player.mute = settings.options.mute;
   }
 
   // Apply music source change if different
-  const needsReload = await applyMusicSourceChange(settings);
+  const musicSourceChanged = await applyMusicSourceChange(settings);
 
   // Clear pending settings
   g_state.pendingSettings = null;
@@ -544,15 +596,50 @@ async function handleApplySettings() {
   // Close the modal
   document.getElementById('settings-modal').classList.remove('show');
 
-  // If we changed source or settings that require reload, create new player
-  if (needsReload) {
+  // Reload player if any of these changed:
+  // musicSourceChanged == true: music source didn't change, but we may need reload for other settings
+  // musicSourceChanged == false: music source changed, handler already called createPlayer()
+  console.log('[handleApplySettings] musicSourceChanged:', musicSourceChanged);
+  console.log('[handleApplySettings] rendererChanged:', rendererChanged);
+  console.log(
+    '[handleApplySettings] accompanimentChanged:',
+    accompanimentChanged,
+  );
+  console.log(
+    '[handleApplySettings] renderOptionsChanged:',
+    renderOptionsChanged,
+  );
+  if (
+    musicSourceChanged &&
+    (rendererChanged || accompanimentChanged || renderOptionsChanged)
+  ) {
+    // Only other settings changed, not music source - need to reload
+    console.log('[handleApplySettings] Calling createPlayer()');
     createPlayer();
+  } else {
+    console.log('[handleApplySettings] NOT calling createPlayer()');
   }
+  // If musicSourceChanged is false, the music source handler already called createPlayer()
+  // with all the updated settings, so we don't need to call it again
+
+  // Clear the flag after player is created
+  g_state.settingsAppliedRenderer = false;
 }
 
 async function applyMusicSourceChange(settings) {
   const currentSource = determineCurrentMusicSource();
   const currentSheet = g_state.params.get('sheet') ?? DEFAULT_SHEET;
+
+  console.log('[applyMusicSourceChange] Current source:', currentSource);
+  console.log(
+    '[applyMusicSourceChange] Settings source:',
+    settings.musicSource,
+  );
+  console.log('[applyMusicSourceChange] Current sheet:', currentSheet);
+  console.log(
+    '[applyMusicSourceChange] Settings sampleValue:',
+    settings.sampleValue,
+  );
 
   // Check if source changed
   const sourceChanged = settings.musicSource !== currentSource;
@@ -560,14 +647,24 @@ async function applyMusicSourceChange(settings) {
   // Check if value changed within the same source type
   let valueChanged = false;
   if (settings.musicSource === 'samples') {
+    // Normalize paths for comparison (both should have data/ prefix or neither)
+    const normalizedCurrent = currentSheet.startsWith('data/')
+      ? currentSheet
+      : 'data/' + currentSheet;
+    const normalizedSettings = settings.sampleValue?.startsWith('data/')
+      ? settings.sampleValue
+      : 'data/' + (settings.sampleValue || '');
     valueChanged =
-      settings.sampleValue && settings.sampleValue !== currentSheet;
+      settings.sampleValue && normalizedSettings !== normalizedCurrent;
   } else if (settings.musicSource === 'url') {
     valueChanged = settings.urlValue && settings.urlValue !== currentSheet;
   } else if (settings.musicSource === 'playlist') {
     valueChanged =
       settings.playlistId && settings.playlistId !== g_state.currentPlaylistId;
   }
+
+  console.log('[applyMusicSourceChange] Source changed:', sourceChanged);
+  console.log('[applyMusicSourceChange] Value changed:', valueChanged);
 
   // If source changed OR value changed, load the new music
   if (sourceChanged || valueChanged) {
@@ -730,7 +827,10 @@ async function handleSampleSelect(e) {
   clearPlaylistState();
 
   try {
-    g_state.params.set('renderer', option.getAttribute('data-renderer'));
+    // Only set renderer from sample data if not coming from settings modal with explicit renderer choice
+    if (!g_state.settingsAppliedRenderer) {
+      g_state.params.set('renderer', option.getAttribute('data-renderer'));
+    }
     g_state.params.set('converter', option.getAttribute('data-converter'));
     if (sheet.endsWith('.musicxml') || sheet.endsWith('.mxl')) {
       // Fetch the MusicXML file
@@ -1158,7 +1258,8 @@ function handleOptionChange(e) {
     metronome: !!document.getElementById('option-metronome').checked,
     follow: true, // Always checked
     respectLineBreaks: !!document.getElementById('respect-line-breaks').checked,
-    showMeasureNumbers: !!document.getElementById('show-measure-numbers').checked,
+    showMeasureNumbers: !!document.getElementById('show-measure-numbers')
+      .checked,
   };
 
   // If in settings modal, update pending settings
@@ -1962,14 +2063,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   );
   respectLineBreaksCheckbox.checked = g_state.options.respectLineBreaks;
   respectLineBreaksCheckbox.addEventListener('change', handleOptionChange);
-  
+
   // Initialize and add listener for show-measure-numbers checkbox
   const showMeasureNumbersCheckbox = document.getElementById(
     'show-measure-numbers',
   );
-  showMeasureNumbersCheckbox.checked = g_state.options.showMeasureNumbers ?? false;
+  showMeasureNumbersCheckbox.checked =
+    g_state.options.showMeasureNumbers ?? false;
   showMeasureNumbersCheckbox.addEventListener('change', handleOptionChange);
-  
+
   window.addEventListener('keydown', handlePlayPauseKey);
 
   // Settings modal controls
