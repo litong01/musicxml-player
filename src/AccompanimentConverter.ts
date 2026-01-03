@@ -1438,27 +1438,44 @@ export class AccompanimentConverter implements IMIDIConverter {
     }
 
     // Add string pad track (if not solo-only mode)
-    // DISABLED: Focus on metronome fixes first
-    // if (this._options.outputMode !== 'solo-only') {
-    //   const stringsTrack = midi.addTrack();
-    //   stringsTrack.name = 'Strings';
-    //   stringsTrack.channel = 3;
-    //   stringsTrack.instrument.number = 48; // String Ensemble 1
+    if (this._options.outputMode !== 'solo-only') {
+      console.log('[AccompanimentConverter] Adding string pad track');
+      const stringsTrack = midi.addTrack();
+      stringsTrack.name = 'Strings';
+      stringsTrack.channel = 3;
+      stringsTrack.instrument.number = 48; // String Ensemble 1
 
-    //   for (const chord of chords) {
-    //     const voicing = this._getChordVoicing(chord);
-    //     const velocity = 50 * energy.strings; // Softer than piano for pad effect
+      let previousStringVoicing: number[] = [];
 
-    //     for (const pitch of voicing) {
-    //       stringsTrack.addNote({
-    //         midi: pitch,
-    //         time: chord.time,
-    //         duration: chord.duration, // Full sustain for pad
-    //         velocity: velocity / 127,
-    //       });
-    //     }
-    //   }
-    // }
+      for (const chord of chords) {
+        let voicing = this._getChordVoicing(chord);
+
+        // Use voice leading for smooth string transitions
+        if (previousStringVoicing.length > 0) {
+          voicing = this._getSmootherVoicing(voicing, previousStringVoicing);
+        }
+        previousStringVoicing = voicing;
+
+        const baseVelocity = 50 * energy.strings; // Softer than piano for pad effect
+
+        // Strings play full chords with sustain and slight swell
+        for (let i = 0; i < voicing.length; i++) {
+          const pitch = voicing[i];
+
+          // Slight velocity variation per note for realism
+          const noteVelocity =
+            (baseVelocity * (0.95 + Math.random() * 0.1)) / 127;
+
+          // Full sustain for pad effect with slight overlap
+          stringsTrack.addNote({
+            midi: pitch,
+            time: chord.time,
+            duration: chord.duration * 1.05, // Slight overlap for smooth transitions
+            velocity: noteVelocity,
+          });
+        }
+      }
+    }
 
     // Add brass section track (if not solo-only mode)
     // DISABLED: Focus on metronome fixes first
