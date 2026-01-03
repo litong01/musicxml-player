@@ -125,6 +125,7 @@ async function createPlayer() {
   const velocity = g_state.params.get('velocity') ?? DEFAULT_VELOCITY;
   const repeat = g_state.params.get('repeat') ?? DEFAULT_REPEAT;
   const options = g_state.options;
+  console.log('[createPlayer] options.metronome:', options.metronome);
 
   // Reset UI elements.
   const samples = document.getElementById('samples');
@@ -186,8 +187,7 @@ async function createPlayer() {
   console.log('[createPlayer] Final renderer after checks:', renderer);
   document.getElementById(`renderer-${renderer}`).checked = true;
 
-  // Auto-detect converter: prefer custom MIDI if available, otherwise generate
-  let detectedConverter = 'vrv'; // Default to Verovio (for solo-only mode)
+  // Auto-detect converter: prefer custom MIDI if available, otherwise use AccompanimentConverter
   let hasMidiFile = false;
 
   // Check if custom MIDI file exists in data directory (skip for external URLs)
@@ -195,49 +195,36 @@ async function createPlayer() {
     .replace(/\.(musicxml|mxl|xml)$/i, '')
     .replace(/^data\//, '');
 
-  const shouldUseBandMode =
-    g_state.accompanimentMode === 'band-only' ||
-    g_state.accompanimentMode === 'solo-and-band';
-
-  // Skip MIDI file check when using band mode (need to generate fresh with accompaniment)
-  if (!shouldUseBandMode) {
-    // Check for existing MIDI files only in solo-only mode
-    if (baseName !== 'remote-file') {
-      try {
-        const midiPath = base.replace(/\.\w+$/, '.mid');
-        await fetish(midiPath, { method: 'HEAD' });
-        detectedConverter = 'midi';
-        hasMidiFile = true;
-      } catch {
-        // Check IndexedDB cache for uploaded MIDI files
-        if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
-          const cached = await retrieveMidiFile(baseName);
-          if (cached) {
-            detectedConverter = 'midi';
-            hasMidiFile = true;
-          }
+  // Check for existing MIDI files
+  if (baseName !== 'remote-file') {
+    try {
+      const midiPath = base.replace(/\.\w+$/, '.mid');
+      await fetish(midiPath, { method: 'HEAD' });
+      hasMidiFile = true;
+    } catch {
+      // Check IndexedDB cache for uploaded MIDI files
+      if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
+        const cached = await retrieveMidiFile(baseName);
+        if (cached) {
+          hasMidiFile = true;
         }
       }
-    } else {
-      // For external URLs, check IndexedDB cache only
-      const cached = await retrieveMidiFile(baseName);
-      if (cached) {
-        detectedConverter = 'midi';
-        hasMidiFile = true;
-      }
+    }
+  } else {
+    // For external URLs, check IndexedDB cache only
+    const cached = await retrieveMidiFile(baseName);
+    if (cached) {
+      hasMidiFile = true;
     }
   }
 
-  // Choose converter based on mode and MIDI availability
-  if (shouldUseBandMode) {
-    // Band mode always generates fresh MIDI with accompaniment
-    converter = 'accomp';
-  } else if (hasMidiFile) {
-    // Solo mode with existing MIDI file
+  // Choose converter: use cached MIDI if available, otherwise generate with AccompanimentConverter
+  if (hasMidiFile) {
+    // Use existing MIDI file
     converter = 'midi';
   } else {
-    // Solo mode without MIDI file - generate with Verovio
-    converter = 'vrv';
+    // Generate MIDI with AccompanimentConverter (handles all accompaniment modes)
+    converter = 'accomp';
   }
 
   // Create new player.
@@ -364,18 +351,9 @@ async function createConverter(converter, sheet, groove, renderer) {
     baseName = baseName.replace(/^data\//, '');
   }
 
-  // Skip cached MIDI when using band accompaniment mode (needs fresh generation)
-  const shouldUseBandMode =
-    g_state.accompanimentMode === 'band-only' ||
-    g_state.accompanimentMode === 'solo-and-band';
-
   // Check if we have a cached MIDI file for uploaded content
   // This applies to uploaded files (not starting with http or data/)
-  if (
-    !sheet.startsWith('http') &&
-    !sheet.startsWith('data/') &&
-    !shouldUseBandMode
-  ) {
+  if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
     const cached = await retrieveMidiFile(baseName);
     if (cached) {
       // Ensure MIDI is an ArrayBuffer
@@ -479,6 +457,15 @@ function handleSettingsOpen() {
     }
   });
 
+  // Set the option checkboxes to match current state
+  document.getElementById('option-metronome').checked =
+    g_state.options.metronome;
+  document.getElementById('option-mute').checked = g_state.options.mute;
+  document.getElementById('respect-line-breaks').checked =
+    g_state.options.respectLineBreaks;
+  document.getElementById('show-measure-numbers').checked =
+    g_state.options.showMeasureNumbers;
+
   // Set the actual input values
   if (currentSource === 'samples') {
     const samplesDropdown = document.getElementById('samples');
@@ -545,6 +532,16 @@ async function handleApplySettings() {
     settings.options.showMeasureNumbers !== currentOptions.showMeasureNumbers;
   const renderOptionsChanged =
     metronomeChanged || respectLineBreaksChanged || showMeasureNumbersChanged;
+
+  console.log('[handleApplySettings] metronomeChanged:', metronomeChanged);
+  console.log(
+    '[handleApplySettings] respectLineBreaksChanged:',
+    respectLineBreaksChanged,
+  );
+  console.log(
+    '[handleApplySettings] showMeasureNumbersChanged:',
+    showMeasureNumbersChanged,
+  );
 
   // Apply renderer
   if (rendererChanged) {
