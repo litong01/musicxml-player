@@ -56,6 +56,10 @@ export class VerovioStaticConverter
     return this._timemap;
   }
 
+  get unrolledMusicXml(): string | undefined {
+    return undefined;
+  }
+
   get version(): string {
     return `${pkg.name}/VerovioStaticConverter v${pkg.version}`;
   }

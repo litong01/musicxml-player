@@ -120,24 +120,75 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     // Store the converter's timemap for accurate cursor positioning
     this._timemap = options.converter.timemap;
 
+    // Reset processed entries for new piece
+    this._processedTimemapEntries.clear();
+
     this._redraw();
   }
 
+  // Track which timemap entries we've processed
+  private _processedTimemapEntries = new Set<number>();
+
   moveTo(
     index: MeasureIndex,
-    _start: MillisecsTimestamp,
+    start: MillisecsTimestamp,
     offset: MillisecsTimestamp,
   ): void {
     assertIsDefined(this._osmd);
-    const measure = this._osmd.Sheet.SourceMeasures[index];
 
-    if (!measure) {
+    // If we've already processed all timemap entries, stop immediately
+    if (this._processedTimemapEntries.size >= this._timemap.length) {
       return;
     }
 
-    // Get timing information from the Verovio timemap
-    const timemapEntry = this._timemap[index];
+    // Find which timemap entry this corresponds to and mark it as processed
+    const TOLERANCE = 10;
+    const timemapIndex = this._timemap.findIndex(
+      (entry) =>
+        entry.measure === index &&
+        Math.abs(entry.timestamp - start) < TOLERANCE,
+    );
+
+    if (timemapIndex >= 0) {
+      this._processedTimemapEntries.add(timemapIndex);
+    }
+
+    // Timemap uses milliseconds, so compare directly
+
+    const measure = this._osmd.Sheet.SourceMeasures[index];
+
+    if (!measure) {
+      console.warn(`[OSMD] No measure found at index ${index}`);
+      return;
+    }
+
+    // Find the correct timemap entry by timestamp, not by index
+    // This handles cases where the same measure number appears multiple times (repeats)
+    let timemapEntry = this._timemap.find(
+      (entry) =>
+        entry.measure === index &&
+        Math.abs(entry.timestamp - start) < TOLERANCE,
+    );
+
+    // Fallback: if exact match not found, use the entry closest to current time
     if (!timemapEntry) {
+      const candidateEntries = this._timemap.filter(
+        (entry) => entry.measure === index,
+      );
+      if (candidateEntries.length > 0) {
+        timemapEntry = candidateEntries.reduce((closest, entry) =>
+          Math.abs(entry.timestamp - start) <
+          Math.abs(closest.timestamp - start)
+            ? entry
+            : closest,
+        );
+      }
+    }
+
+    if (!timemapEntry) {
+      console.warn(
+        `[OSMD] No timemap entry found for measure ${index} at ${(start / 1000).toFixed(2)}s (${start}ms)`,
+      );
       return;
     }
 
@@ -157,17 +208,25 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     ) {
       const vsse = measure.VerticalSourceStaffEntryContainers[v]!;
 
-      // Convert OSMD's musical time (whole note units) to milliseconds
+      // Convert OSMD's musical time (whole note units) to seconds
       const vsseTimeRatio = vsse.Timestamp.RealValue / measureMusicalDuration;
-      const vsseTime = vsseTimeRatio * measureDuration;
+      const vsseTime = vsseTimeRatio * (measureDuration / 1000); // measureDuration is in ms, convert to seconds
 
-      if (vsseTime <= offset + Number.EPSILON) {
+      if (vsseTime <= offset / 1000 + Number.EPSILON) {
         if (
           this._currentMeasureIndex !== index ||
           this._currentVoiceEntryIndex !== v
         ) {
           this._updateCursor(index, v);
         }
+
+        // After updating cursor, check if we've now processed all entries
+        if (this._processedTimemapEntries.size >= this._timemap.length) {
+          console.log(
+            `[OSMD] Processed all ${this._timemap.length} timemap entries, stopping cursor updates`,
+          );
+        }
+
         return;
       }
     }

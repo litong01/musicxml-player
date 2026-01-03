@@ -21,6 +21,7 @@ export interface IMIDIConverter {
     initialize(musicXml: string, options: Required<PlayerOptions>): Promise<void>;
     get midi(): ArrayBuffer;
     get timemap(): MeasureTimemap;
+    get unrolledMusicXml(): string | undefined;
     get version(): string;
 }
 //# sourceMappingURL=IMIDIConverter.d.ts.map

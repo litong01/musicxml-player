@@ -87,6 +87,11 @@ export interface PlayerOptions {
      */
     followCursor?: boolean;
     /**
+     * A flag to add a metronome click track to the MIDI output.
+     * Optional, default: false
+     */
+    metronome?: boolean;
+    /**
      * XSLT processor instance for XML processing.
      * Optional, default: new SaxonJSAdapter()
      */
@@ -189,6 +194,6 @@ export declare class Player {
      *
      * @see https://github.com/spessasus/SpessaSynth/discussions/176
      */
-    protected static _adjustMidiDuration(converter: IMIDIConverter): BasicMIDI;
+    protected static _adjustMidiDuration(converter: IMIDIConverter, addMetronome?: boolean): BasicMIDI;
 }
 //# sourceMappingURL=Player.d.ts.map

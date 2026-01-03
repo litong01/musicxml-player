@@ -22,6 +22,7 @@ export declare class FetchConverter implements IMIDIConverter {
     private _generateTimemapWithVerovio;
     get midi(): ArrayBuffer;
     get timemap(): MeasureTimemap;
+    get unrolledMusicXml(): string | undefined;
     get version(): string;
 }
 //# sourceMappingURL=FetchConverter.d.ts.map

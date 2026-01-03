@@ -97,6 +97,10 @@ export class VerovioConverter
     return this._timemap;
   }
 
+  get unrolledMusicXml(): string | undefined {
+    return undefined;
+  }
+
   get version(): string {
     return `verovio v${this._vrv?.getVersion() ?? 'Unknown'}`;
   }

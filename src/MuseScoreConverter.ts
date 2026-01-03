@@ -37,6 +37,10 @@ export class MuseScoreConverter
     return this._timemap;
   }
 
+  get unrolledMusicXml(): string | undefined {
+    return undefined;
+  }
+
   get version(): string {
     return `${pkg.name}/MuseScoreConverter v${pkg.version}`;
   }

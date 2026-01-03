@@ -16,6 +16,7 @@ export declare class VerovioConverter extends VerovioConverterBase implements IM
     initialize(musicXml: string, options: Required<PlayerOptions>): Promise<void>;
     get midi(): ArrayBuffer;
     get timemap(): MeasureTimemap;
+    get unrolledMusicXml(): string | undefined;
     get version(): string;
 }
 //# sourceMappingURL=VerovioConverter.d.ts.map

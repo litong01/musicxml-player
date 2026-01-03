@@ -94,6 +94,10 @@ export class FetchConverter implements IMIDIConverter {
     return this._timemap;
   }
 
+  get unrolledMusicXml(): string | undefined {
+    return undefined;
+  }
+
   get version(): string {
     return `${pkg.name}/FetchConverter v${pkg.version}`;
   }

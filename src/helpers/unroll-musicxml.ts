@@ -1,7 +1,9 @@
 import type { IXSLTProcessor } from '../interfaces/IXSLTProcessor';
+import { normalizeMeasures } from './normalize-measures';
 
 /**
  * Unroll the MusicXML score by expanding all repeats and jumps into a linear score.
+ * Also normalizes each measure to have explicit tempo and time signature.
  */
 export async function unrollMusicXml(
   musicXml: string,
@@ -9,10 +11,12 @@ export async function unrollMusicXml(
   xsltProcessor: IXSLTProcessor,
 ): Promise<string> {
   try {
-    const unroll = await xsltProcessor.transform(unrollXslUri, musicXml, {
-      renumberMeasures: true,
+    const unrolled = await xsltProcessor.transform(unrollXslUri, musicXml, {
+      renumberMeasures: false, // Preserve original measure numbers for tempo mapping
     });
-    return unroll;
+
+    // Normalize: propagate tempo based on original measure numbers
+    return normalizeMeasures(unrolled, musicXml);
   } catch (error) {
     console.error(`[unrollMusicXml] ${error}`);
   }

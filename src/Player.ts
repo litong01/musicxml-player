@@ -15,6 +15,7 @@ import {
   fetish,
   debounce,
   addMetronomeTrack,
+  removeFermatas,
 } from './helpers';
 
 const DEBOUNCE_THROTTLE = 100;
@@ -172,7 +173,12 @@ export class Player {
           version: '//score-partwise/@version',
         },
       );
-      let musicXml = parseResult.musicXml;
+
+      // PHASE 1: Remove fermatas (causes timing issues for metronome and playback)
+      let musicXml = removeFermatas(parseResult.musicXml);
+      console.log('[Player] Fermatas removed from MusicXML');
+
+      // STEP 2: Unroll only for rendering if requested
       if (options.unroll) {
         musicXml = await unrollMusicXml(
           musicXml,
@@ -197,8 +203,9 @@ export class Player {
       // Initialize the various objects.
       // It's too bad that constructors cannot be made async because that would simplify the code.
       // INFO Keep looking into this
+      // NOTE: Use original XML for both converter and renderer
+      // (unrolled XML normalization creates invalid XML declarations)
       await options.converter.initialize(musicXml, options);
-      // INFO This renders the music xml into the given HTMLElement
       await options.renderer.initialize(sheet, musicXml, options);
 
       // Finally, create the player instance.
@@ -312,8 +319,7 @@ export class Player {
       })
       .last();
     if (entry) {
-      this._sequencer.currentTime =
-        (entry.timestamp + measureOffset) / 1000;
+      this._sequencer.currentTime = (entry.timestamp + measureOffset) / 1000;
     }
 
     // Set the cursor position.

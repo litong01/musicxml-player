@@ -4,11 +4,7 @@ import type {
   MeasureTimemap,
 } from './interfaces/IMIDIConverter';
 import type { PlayerOptions } from './Player';
-import {
-  assertIsDefined,
-  parseMusicXmlTimemap,
-  unrollMusicXml,
-} from './helpers';
+import { assertIsDefined, normalizeMeasures, unrollMusicXml } from './helpers';
 import pkg from '../package.json';
 import { XMLParser } from 'fast-xml-parser';
 
@@ -41,6 +37,7 @@ interface Chord {
 export class AccompanimentConverter implements IMIDIConverter {
   protected _midi?: ArrayBuffer;
   protected _timemap?: MeasureTimemap;
+  protected _unrolledMusicXml?: string;
   protected _options: Required<AccompanimentOptions>;
 
   constructor(options: AccompanimentOptions = {}) {
@@ -57,38 +54,166 @@ export class AccompanimentConverter implements IMIDIConverter {
     musicXml: string,
     options: Required<PlayerOptions>,
   ): Promise<void> {
-    // Generate timemap from ORIGINAL MusicXML (with repeats) for cursor navigation
-    // The XSL processor handles repeat expansion and maps it correctly to the rendered measures
-    this._timemap = await parseMusicXmlTimemap(
-      musicXml,
-      options.timemapXslUri,
-      options.xsltProcessor,
-    );
-
     // Always unroll the MusicXML to expand repeats for MIDI generation
-    // (This is separate from rendering - the renderer respects options.unroll)
-    let unrolledMusicXml = musicXml;
     const unrolled = await unrollMusicXml(
       musicXml,
       options.unrollXslUri,
       options.xsltProcessor,
     );
     if ((unrolled.match(/<note[\s>]/g) || []).length > 0) {
-      unrolledMusicXml = unrolled;
+      this._unrolledMusicXml = unrolled; // Store for renderer
     }
 
-    // Parse the MusicXML and extract notes
+    // Normalize the unrolled XML to propagate tempo through all measures
+    // normalizeMeasures(toNormalize, tempoSource)
+    const normalizedUnrolled = normalizeMeasures(unrolled, musicXml);
+
+    // Parse the normalized unrolled XML to generate our own timemap
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
     });
-    const xmlDoc = parser.parse(unrolledMusicXml);
+    const normalizedXmlDoc = parser.parse(normalizedUnrolled);
 
-    // Extract melody notes and detect if it's percussion
-    const { notes, isPercussion, tempo } = this._extractNotes(xmlDoc);
+    // Generate timemap from normalized unrolled XML
+    console.log(
+      '[AccompanimentConverter] Generating timemap from normalized unrolled XML',
+    );
+    this._timemap = this._generateTimemapFromXML(normalizedXmlDoc);
+    console.log(
+      `[AccompanimentConverter] Timemap generated: ${this._timemap.length} entries`,
+    );
+
+    // Extract tempo from ORIGINAL MusicXML (for reference only)
+    const originalXmlDoc = parser.parse(musicXml);
+    const { tempo: initialTempo } = this._extractTempoMetadata(originalXmlDoc);
+
+    // Parse the NORMALIZED UNROLLED MusicXML for note extraction
+    const unrolledXmlDoc = parser.parse(normalizedUnrolled);
+
+    // Extract tempo changes from NORMALIZED UNROLLED XML
+    // This has the correct tempo flow considering repeats
+    const unrolledTempoChanges =
+      this._extractTempoChangesFromUnrolled(unrolledXmlDoc);
+
+    console.log(
+      `[AccompanimentConverter] Extracted ${unrolledTempoChanges.length} tempo change(s) from normalized unrolled XML`,
+    );
+
+    // DEBUG: Log measure count and structure
+    const scorePartwise = unrolledXmlDoc['score-partwise'];
+    if (scorePartwise && scorePartwise.part) {
+      const parts = Array.isArray(scorePartwise.part)
+        ? scorePartwise.part
+        : [scorePartwise.part];
+      if (parts[0] && parts[0].measure) {
+        const measures = Array.isArray(parts[0].measure)
+          ? parts[0].measure
+          : [parts[0].measure];
+        console.log(
+          `[AccompanimentConverter] Unrolled XML has ${measures.length} measures`,
+        );
+      }
+    }
+
+    // Extract melody notes from UNROLLED and NORMALIZED XML
+    // Each measure has explicit tempo from normalization
+    const { notes, isPercussion } = this._extractNotes(
+      unrolledXmlDoc,
+      initialTempo,
+    );
+
+    // Debug: Check note timeline
+    if (notes.length > 0) {
+      const lastNote = notes[notes.length - 1];
+      const notesEndTime = lastNote.time + lastNote.duration;
+      console.log(
+        `[AccompanimentConverter] Notes timeline: first note at ${notes[0].time.toFixed(2)}s, last note ends at ${notesEndTime.toFixed(2)}s`,
+      );
+      console.log(
+        `[AccompanimentConverter] Total notes generated: ${notes.length}`,
+      );
+
+      // Find notes around measure 14-15 (37-42 seconds)
+      const notesInRange = notes.filter((n) => n.time >= 35 && n.time <= 45);
+      console.log(
+        `[AccompanimentConverter] Notes between 35-45s: ${notesInRange.length} notes`,
+      );
+      if (notesInRange.length > 0) {
+        console.log(
+          `[AccompanimentConverter] First note in range: time=${notesInRange[0].time.toFixed(2)}s, duration=${notesInRange[0].duration.toFixed(2)}s`,
+        );
+        console.log(
+          `[AccompanimentConverter] Last note in range: time=${notesInRange[notesInRange.length - 1].time.toFixed(2)}s, duration=${notesInRange[notesInRange.length - 1].duration.toFixed(2)}s`,
+        );
+      }
+    } else {
+      console.warn('[AccompanimentConverter] No notes extracted!');
+    }
+
+    // Map tempo changes from unrolled XML to timemap positions
+    const tempo = initialTempo;
+    const tempoChanges: Array<{
+      time: number;
+      bpm: number;
+      measure: number;
+      position: number;
+    }> = [];
+
+    for (const change of unrolledTempoChanges) {
+      // Find the timemap entry at this POSITION (0-indexed in measures array)
+      // Timemap appears to be 1-indexed or has measure 0 at index 0, so we need +1 offset
+      const timemapIndex = change.position + 1;
+      if (timemapIndex >= 0 && timemapIndex < this._timemap.length) {
+        const timemapEntry = this._timemap[timemapIndex];
+        console.log(
+          `[AccompanimentConverter] Tempo change at array position ${change.position} → timemap[${timemapIndex}]: ${change.bpm} BPM, measure ${timemapEntry.measure} at ${(timemapEntry.timestamp / 1000).toFixed(2)}s`,
+        );
+        tempoChanges.push({
+          time: timemapEntry.timestamp / 1000, // Convert ms to seconds
+          bpm: change.bpm,
+          measure: timemapEntry.measure,
+          position: timemapIndex,
+        });
+      } else {
+        console.warn(
+          `[AccompanimentConverter] No timemap entry at index ${timemapIndex} (array position ${change.position})`,
+        );
+      }
+    }
+
+    // Sort tempo changes by time to ensure they're in chronological order
+    tempoChanges.sort((a, b) => a.time - b.time);
+
+    // PHASE 2: Log tempo changes
+    if (tempoChanges.length > 0) {
+      console.log(
+        `[AccompanimentConverter] Using ${tempoChanges.length} tempo change(s):`,
+      );
+      tempoChanges.forEach((change) => {
+        console.log(
+          `  Position ${change.position} - Measure ${change.measure} (${change.time.toFixed(2)}s): ${change.bpm} BPM`,
+        );
+      });
+    } else {
+      console.log(
+        `[AccompanimentConverter] No tempo changes detected. Using ${tempo} BPM throughout.`,
+      );
+    }
+
+    // DEBUG: Log timemap entries around measure 14-15 to analyze tempo
+    console.log('[AccompanimentConverter] Timemap entries for measures 13-16:');
+    for (let m = 13; m <= 16; m++) {
+      const entries = this._timemap.filter((e) => e.measure === m);
+      entries.forEach((e) => {
+        console.log(
+          `  Measure ${e.measure}: ${(e.timestamp / 1000).toFixed(2)}s, duration ${(e.duration / 1000).toFixed(2)}s`,
+        );
+      });
+    }
 
     // Detect key signature
-    const keySignature = this._detectKey(xmlDoc, notes);
+    const keySignature = this._detectKey(unrolledXmlDoc, notes);
 
     // Generate chord progression
     const chords = this._generateChords(
@@ -103,29 +228,36 @@ export class AccompanimentConverter implements IMIDIConverter {
       notes,
       chords,
       tempo,
+      tempoChanges,
       isPercussion,
     );
 
-    // Fix timemap to match actual MIDI duration
     // Parse the generated MIDI to get the true duration
     const midiArray = new Uint8Array(this._midi);
     const midi = new Midi(midiArray);
     const actualMidiDuration = midi.duration;
+
+    console.log(
+      `[AccompanimentConverter] MIDI duration: ${actualMidiDuration.toFixed(2)}s`,
+    );
 
     if (this._timemap.length > 0) {
       const lastEntry = this._timemap[this._timemap.length - 1];
       const timemapTotalDuration =
         (lastEntry.timestamp + lastEntry.duration) / 1000;
 
-      if (Math.abs(actualMidiDuration - timemapTotalDuration) > 1) {
-        // Significant mismatch - scale the timemap to match MIDI
-        const scaleFactor = actualMidiDuration / timemapTotalDuration;
+      console.log(
+        `[AccompanimentConverter] Timemap total duration: ${timemapTotalDuration.toFixed(2)}s`,
+      );
 
-        this._timemap = this._timemap.map((entry) => ({
-          measure: entry.measure,
-          timestamp: entry.timestamp * scaleFactor,
-          duration: entry.duration * scaleFactor,
-        }));
+      if (Math.abs(actualMidiDuration - timemapTotalDuration) > 1) {
+        console.warn(
+          `[AccompanimentConverter] WARNING: MIDI duration (${actualMidiDuration.toFixed(2)}s) differs from timemap (${timemapTotalDuration.toFixed(2)}s) by ${Math.abs(actualMidiDuration - timemapTotalDuration).toFixed(2)}s`,
+        );
+      } else {
+        console.log(
+          `[AccompanimentConverter] MIDI and timemap durations match within tolerance`,
+        );
       }
 
       // Ensure timemap covers the full MIDI duration
@@ -142,23 +274,249 @@ export class AccompanimentConverter implements IMIDIConverter {
   }
 
   /**
-   * Extract notes from parsed MusicXML
+   * Extract tempo metadata from ORIGINAL MusicXML (before unrolling)
+   * Returns initial tempo and tempo changes with measure numbers only
    */
-  private _extractNotes(xmlDoc: any): {
+  private _extractTempoMetadata(xmlDoc: any): {
+    tempo: number;
+    tempoChanges: Array<{ bpm: number; measure: number }>;
+  } {
+    let initialTempo = 120; // Default tempo (returned)
+    let currentTempo = 120; // Track current tempo for comparison
+    const tempoChanges: Array<{ bpm: number; measure: number }> = [];
+    let foundInitialTempo = false;
+
+    try {
+      const scorePartwise = xmlDoc['score-partwise'];
+      if (!scorePartwise) return { tempo: initialTempo, tempoChanges };
+
+      const parts = Array.isArray(scorePartwise.part)
+        ? scorePartwise.part
+        : [scorePartwise.part];
+
+      // Only process the first part
+      const part = parts[0];
+      if (part && part.measure) {
+        const partMeasures = Array.isArray(part.measure)
+          ? part.measure
+          : [part.measure];
+
+        for (let i = 0; i < partMeasures.length; i++) {
+          const measure = partMeasures[i];
+          if (!measure) continue;
+
+          const measureNumber = measure['@_number']
+            ? Number(measure['@_number'])
+            : i + 1;
+
+          // Check for tempo changes
+          if (measure.direction) {
+            const directions = Array.isArray(measure.direction)
+              ? measure.direction
+              : [measure.direction];
+
+            for (const direction of directions) {
+              if (direction.sound && direction.sound['@_tempo']) {
+                const newTempo = Number(direction.sound['@_tempo']);
+                if (!foundInitialTempo) {
+                  // First tempo marking found - set as initial tempo
+                  initialTempo = newTempo;
+                  currentTempo = newTempo;
+                  foundInitialTempo = true;
+                  console.log(
+                    `[AccompanimentConverter] Initial tempo: ${initialTempo} BPM at measure ${measureNumber}`,
+                  );
+                } else if (newTempo !== currentTempo) {
+                  // Tempo change detected
+                  tempoChanges.push({
+                    bpm: newTempo,
+                    measure: measureNumber,
+                  });
+                  console.log(
+                    `[AccompanimentConverter] Tempo change: ${newTempo} BPM at measure ${measureNumber}`,
+                  );
+                  currentTempo = newTempo;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(
+        '[AccompanimentConverter] Error extracting tempo metadata:',
+        error,
+      );
+    }
+
+    console.log(
+      `[AccompanimentConverter] Extracted tempo metadata from original: ${initialTempo} BPM (initial), ${tempoChanges.length} change(s)`,
+    );
+    return { tempo: initialTempo, tempoChanges };
+  }
+
+  /**
+   * Extract tempo changes from unrolled and normalized XML.
+   * Returns tempo changes with their POSITION in the unrolled sequence.
+   */
+  private _extractTempoChangesFromUnrolled(xmlDoc: any): Array<{
+    bpm: number;
+    position: number;
+  }> {
+    const tempoChanges: Array<{ bpm: number; position: number }> = [];
+    let previousTempo: number | null = null;
+
+    try {
+      const scorePartwise = xmlDoc['score-partwise'];
+      if (!scorePartwise) return tempoChanges;
+
+      const parts = Array.isArray(scorePartwise.part)
+        ? scorePartwise.part
+        : [scorePartwise.part];
+
+      // Only process the first part
+      const part = parts[0];
+      if (part && part.measure) {
+        const partMeasures = Array.isArray(part.measure)
+          ? part.measure
+          : [part.measure];
+
+        for (let position = 0; position < partMeasures.length; position++) {
+          const measure = partMeasures[position];
+          if (!measure) continue;
+
+          // Check for tempo in this measure
+          if (measure.direction) {
+            const directions = Array.isArray(measure.direction)
+              ? measure.direction
+              : [measure.direction];
+
+            for (const direction of directions) {
+              if (direction.sound && direction.sound['@_tempo']) {
+                const tempo = Number(direction.sound['@_tempo']);
+
+                // Only record if tempo changed
+                if (previousTempo === null || tempo !== previousTempo) {
+                  tempoChanges.push({
+                    bpm: tempo,
+                    position: position,
+                  });
+                  previousTempo = tempo;
+                }
+                break; // Only take first tempo in measure
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(
+        '[AccompanimentConverter] Error extracting tempo from unrolled XML:',
+        error,
+      );
+    }
+
+    return tempoChanges;
+  }
+
+  /**
+   * Generate a timemap from normalized unrolled XML.
+   * Creates continuous timeline with proper tempo-based durations.
+   */
+  private _generateTimemapFromXML(xmlDoc: any): MeasureTimemap {
+    const timemap: MeasureTimemap = [];
+    let currentTime = 0; // in milliseconds
+
+    try {
+      const scorePartwise = xmlDoc['score-partwise'];
+      if (!scorePartwise) return timemap;
+
+      const parts = Array.isArray(scorePartwise.part)
+        ? scorePartwise.part
+        : [scorePartwise.part];
+
+      if (!parts[0] || !parts[0].measure) return timemap;
+
+      const measures = Array.isArray(parts[0].measure)
+        ? parts[0].measure
+        : [parts[0].measure];
+
+      let currentTempo = 120; // Default tempo
+
+      for (let i = 0; i < measures.length; i++) {
+        const measure = measures[i];
+        if (!measure) continue;
+
+        // Get measure number (0-based for timemap)
+        const measureNumber = measure['@_number']
+          ? Number(measure['@_number']) - 1
+          : i;
+
+        // Check for tempo change in this measure
+        if (measure.direction) {
+          const directions = Array.isArray(measure.direction)
+            ? measure.direction
+            : [measure.direction];
+
+          for (const direction of directions) {
+            if (direction.sound && direction.sound['@_tempo']) {
+              currentTempo = Number(direction.sound['@_tempo']);
+              break;
+            }
+          }
+        }
+
+        // Get time signature from attributes
+        let timeBeats = 4;
+        let beatType = 4;
+        if (measure.attributes?.time) {
+          timeBeats = Number(measure.attributes.time.beats);
+          beatType = Number(measure.attributes.time['beat-type']);
+        }
+
+        // Calculate measure duration in milliseconds
+        // Duration = (beats / beat_type) * 4 quarter notes * (60000ms/tempo)
+        const quarterNotes = (timeBeats / beatType) * 4;
+        const msPerQuarterNote = 60000 / currentTempo;
+        const measureDuration = Math.round(quarterNotes * msPerQuarterNote);
+
+        timemap.push({
+          measure: measureNumber,
+          timestamp: currentTime,
+          duration: measureDuration,
+        });
+
+        currentTime += measureDuration;
+      }
+    } catch (error) {
+      console.error(
+        '[AccompanimentConverter] Error generating timemap:',
+        error,
+      );
+    }
+
+    return timemap;
+  }
+
+  /**
+   * Extract notes from parsed MusicXML (UNROLLED and NORMALIZED version)
+   * Each measure already has explicit tempo thanks to normalization
+   */
+  private _extractNotes(
+    xmlDoc: any,
+    _initialTempo: number,
+  ): {
     notes: Note[];
     isPercussion: boolean;
-    tempo: number;
   } {
     const notes: Note[] = [];
-    let currentTime = 0;
-    let tempo = 120; // Default tempo
     let divisions = 1;
     let isPercussion = false;
 
     try {
       // Navigate to score-partwise structure
       const scorePartwise = xmlDoc['score-partwise'];
-      if (!scorePartwise) return { notes, isPercussion, tempo };
+      if (!scorePartwise) return { notes, isPercussion };
 
       // Get part list to check for percussion
       const partList = scorePartwise['part-list'];
@@ -191,30 +549,39 @@ export class AccompanimentConverter implements IMIDIConverter {
           ? part.measure
           : [part.measure];
 
-        currentTime = 0;
-
         for (let i = 0; i < partMeasures.length; i++) {
           const measure = partMeasures[i];
           if (!measure) continue;
 
-          // Get divisions and tempo from attributes
-          if (measure.attributes) {
-            if (measure.attributes.divisions) {
-              divisions = Number(measure.attributes.divisions);
-            }
+          // Get the timemap entry for this position
+          if (!this._timemap || i >= this._timemap.length) {
+            console.warn(
+              `[AccompanimentConverter] No timemap entry for position ${i}`,
+            );
+            continue;
+          }
+          const timemapEntry = this._timemap[i];
+
+          const measureStartTime = timemapEntry.timestamp / 1000; // Convert ms to seconds
+          const measureDuration = timemapEntry.duration / 1000; // Convert ms to seconds
+
+          // Get divisions from attributes
+          if (measure.attributes?.divisions) {
+            divisions = Number(measure.attributes.divisions);
           }
 
-          if (measure.direction) {
-            const directions = Array.isArray(measure.direction)
-              ? measure.direction
-              : [measure.direction];
-
-            for (const direction of directions) {
-              if (direction.sound && direction.sound['@_tempo']) {
-                tempo = Number(direction.sound['@_tempo']);
-              }
-            }
+          // Get measure duration in quarter notes from time signature or default to 4
+          let measureQuarters = 4;
+          if (measure.attributes?.time) {
+            const timeBeats = Number(measure.attributes.time.beats);
+            const beatType = Number(measure.attributes.time['beat-type']);
+            measureQuarters = (timeBeats / beatType) * 4; // Convert to quarter notes
           }
+
+          // Track position within measure (in quarter notes)
+          let positionInMeasure = 0;
+
+          // Measure position logging removed for cleaner output
 
           // Extract notes from measure
           if (measure.note) {
@@ -231,7 +598,14 @@ export class AccompanimentConverter implements IMIDIConverter {
               const duration = note.duration
                 ? Number(note.duration) / divisions
                 : 1;
-              const durationInSeconds = (duration * 60) / tempo;
+
+              // Calculate note time based on timemap timing
+              // Map the note's position within the measure to actual time
+              const noteTime =
+                measureStartTime +
+                (positionInMeasure / measureQuarters) * measureDuration;
+              const noteDurationInSeconds =
+                (duration / measureQuarters) * measureDuration;
 
               // Get pitch
               let pitch = 60; // Default middle C
@@ -256,19 +630,19 @@ export class AccompanimentConverter implements IMIDIConverter {
                 // For unpitched percussion, use a generic note
                 pitch = 60;
               } else if (note.rest) {
-                // Skip rests
-                currentTime += durationInSeconds;
+                // Skip rests but advance position
+                positionInMeasure += duration;
                 continue;
               }
 
               notes.push({
                 pitch,
-                time: currentTime,
-                duration: durationInSeconds,
+                time: noteTime,
+                duration: noteDurationInSeconds,
                 velocity: 80,
               });
 
-              currentTime += durationInSeconds;
+              positionInMeasure += duration;
             }
           }
         }
@@ -277,7 +651,7 @@ export class AccompanimentConverter implements IMIDIConverter {
       console.error('[AccompanimentConverter] Error extracting notes:', error);
     }
 
-    return { notes, isPercussion, tempo };
+    return { notes, isPercussion };
   }
 
   /**
@@ -488,10 +862,23 @@ export class AccompanimentConverter implements IMIDIConverter {
     melodyNotes: Note[],
     chords: Chord[],
     tempo: number,
+    tempoChanges: Array<{ time: number; bpm: number; measure: number }>,
     isPercussion: boolean,
   ): ArrayBuffer {
     const midi = new Midi();
+
+    // Use constant tempo for now to avoid potential hanging issues
     midi.header.setTempo(tempo);
+
+    console.log(
+      `[AccompanimentConverter] MIDI using constant tempo: ${tempo} BPM`,
+    );
+
+    if (tempoChanges.length > 0) {
+      console.log(
+        `[AccompanimentConverter] Note: ${tempoChanges.length} tempo changes detected but not applied to MIDI (using constant ${tempo} BPM)`,
+      );
+    }
 
     // Energy settings
     const energyMap = {
@@ -709,7 +1096,13 @@ export class AccompanimentConverter implements IMIDIConverter {
 
   get timemap(): MeasureTimemap {
     assertIsDefined(this._timemap);
+    // Return the full timemap - don't collapse it
+    // The renderer will handle duplicate measure numbers appropriately
     return this._timemap;
+  }
+
+  get unrolledMusicXml(): string | undefined {
+    return this._unrolledMusicXml;
   }
 
   get version(): string {

@@ -62,6 +62,10 @@ export class MmaConverter implements IMIDIConverter {
     return this._timemap;
   }
 
+  get unrolledMusicXml(): string | undefined {
+    return undefined;
+  }
+
   get version(): string {
     return `${this._version?.name ?? 'musicxml-midi'} v${this._version?.version ?? 'Unknown'}`;
   }

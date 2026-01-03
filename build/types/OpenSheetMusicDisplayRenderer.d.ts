@@ -28,7 +28,8 @@ export declare class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     }[];
     destroy(): void;
     initialize(container: HTMLElement, musicXml: string, options: Required<PlayerOptions>): Promise<void>;
-    moveTo(index: MeasureIndex, _start: MillisecsTimestamp, offset: MillisecsTimestamp): void;
+    private _processedTimemapEntries;
+    moveTo(index: MeasureIndex, start: MillisecsTimestamp, offset: MillisecsTimestamp): void;
     onResize(): void;
     onEvent(): void;
     get version(): string;

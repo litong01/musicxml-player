@@ -14,11 +14,28 @@ export interface AccompanimentOptions {
 export declare class AccompanimentConverter implements IMIDIConverter {
     protected _midi?: ArrayBuffer;
     protected _timemap?: MeasureTimemap;
+    protected _unrolledMusicXml?: string;
     protected _options: Required<AccompanimentOptions>;
     constructor(options?: AccompanimentOptions);
     initialize(musicXml: string, options: Required<PlayerOptions>): Promise<void>;
     /**
-     * Extract notes from parsed MusicXML
+     * Extract tempo metadata from ORIGINAL MusicXML (before unrolling)
+     * Returns initial tempo and tempo changes with measure numbers only
+     */
+    private _extractTempoMetadata;
+    /**
+     * Extract tempo changes from unrolled and normalized XML.
+     * Returns tempo changes with their POSITION in the unrolled sequence.
+     */
+    private _extractTempoChangesFromUnrolled;
+    /**
+     * Generate a timemap from normalized unrolled XML.
+     * Creates continuous timeline with proper tempo-based durations.
+     */
+    private _generateTimemapFromXML;
+    /**
+     * Extract notes from parsed MusicXML (UNROLLED and NORMALIZED version)
+     * Each measure already has explicit tempo thanks to normalization
      */
     private _extractNotes;
     /**
@@ -47,6 +64,7 @@ export declare class AccompanimentConverter implements IMIDIConverter {
     private _getChordVoicing;
     get midi(): ArrayBuffer;
     get timemap(): MeasureTimemap;
+    get unrolledMusicXml(): string | undefined;
     get version(): string;
 }
 //# sourceMappingURL=AccompanimentConverter.d.ts.map
