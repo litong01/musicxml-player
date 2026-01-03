@@ -196,25 +196,19 @@ async function createPlayer() {
     .replace(/^data\//, '');
 
   // Check for existing MIDI files
+  // Note: We only check for .mid files on the server, not IndexedDB cache,
+  // because cached MIDI doesn't account for accompaniment mode changes
   if (baseName !== 'remote-file') {
     try {
       const midiPath = base.replace(/\.\w+$/, '.mid');
       await fetish(midiPath, { method: 'HEAD' });
       hasMidiFile = true;
+      console.log('[createPlayer] Found .mid file on server:', midiPath);
     } catch {
-      // Check IndexedDB cache for uploaded MIDI files
-      if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
-        const cached = await retrieveMidiFile(baseName);
-        if (cached) {
-          hasMidiFile = true;
-        }
-      }
-    }
-  } else {
-    // For external URLs, check IndexedDB cache only
-    const cached = await retrieveMidiFile(baseName);
-    if (cached) {
-      hasMidiFile = true;
+      // No .mid file on server - will use AccompanimentConverter
+      console.log(
+        '[createPlayer] No .mid file found, will generate with AccompanimentConverter',
+      );
     }
   }
 
@@ -222,9 +216,14 @@ async function createPlayer() {
   if (hasMidiFile) {
     // Use existing MIDI file
     converter = 'midi';
+    console.log('[createPlayer] Using MIDI converter (cached MIDI file found)');
   } else {
     // Generate MIDI with AccompanimentConverter (handles all accompaniment modes)
     converter = 'accomp';
+    console.log(
+      '[createPlayer] Using AccompanimentConverter with mode:',
+      g_state.accompanimentMode,
+    );
   }
 
   // Create new player.
@@ -351,18 +350,9 @@ async function createConverter(converter, sheet, groove, renderer) {
     baseName = baseName.replace(/^data\//, '');
   }
 
-  // Check if we have a cached MIDI file for uploaded content
-  // This applies to uploaded files (not starting with http or data/)
-  if (!sheet.startsWith('http') && !sheet.startsWith('data/')) {
-    const cached = await retrieveMidiFile(baseName);
-    if (cached) {
-      // Ensure MIDI is an ArrayBuffer
-      const midiBuffer =
-        cached.midi instanceof ArrayBuffer ? cached.midi : cached.midi.buffer;
-      const fetchConverter = new FetchConverter(midiBuffer, cached.timemap);
-      return fetchConverter;
-    }
-  }
+  // Note: We no longer use IndexedDB cached MIDI here because it doesn't
+  // account for accompaniment mode changes. AccompanimentConverter will
+  // generate fresh MIDI with the correct mode.
 
   switch (converter) {
     case 'midi':

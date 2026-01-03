@@ -1103,7 +1103,7 @@ export class AccompanimentConverter implements IMIDIConverter {
    */
   private _createMidiWithAccompaniment(
     melodyNotes: Note[],
-    _chords: Chord[],
+    chords: Chord[],
     tempo: number,
     tempoChanges: Array<{ time: number; bpm: number; measure: number }>,
     isPercussion: boolean,
@@ -1130,10 +1130,15 @@ export class AccompanimentConverter implements IMIDIConverter {
       strong: { piano: 0.85, bass: 0.9, strings: 0.75, brass: 0.9, drums: 0.8 },
     };
 
-    const _energy = energyMap[this._options.bandEnergy];
+    const energy = energyMap[this._options.bandEnergy];
+
+    console.log(
+      `[AccompanimentConverter] Creating MIDI with outputMode: ${this._options.outputMode}`,
+    );
 
     // Add original melody track (if not band-only mode)
     if (this._options.outputMode !== 'band-only' && !isPercussion) {
+      console.log('[AccompanimentConverter] Adding melody track');
       const melodyTrack = midi.addTrack();
       melodyTrack.name = 'Melody';
       melodyTrack.channel = 0;
@@ -1146,30 +1151,34 @@ export class AccompanimentConverter implements IMIDIConverter {
           velocity: note.velocity / 127,
         });
       }
+    } else {
+      console.log(
+        '[AccompanimentConverter] Skipping melody track (band-only or percussion)',
+      );
     }
 
     // Add piano track (if not solo-only mode)
-    // DISABLED: Focus on metronome fixes first
-    // if (this._options.outputMode !== 'solo-only') {
-    //   const pianoTrack = midi.addTrack();
-    //   pianoTrack.name = 'Piano';
-    //   pianoTrack.channel = 1;
-    //   pianoTrack.instrument.number = 0; // Acoustic Grand Piano
+    if (this._options.outputMode !== 'solo-only') {
+      console.log('[AccompanimentConverter] Adding piano track');
+      const pianoTrack = midi.addTrack();
+      pianoTrack.name = 'Piano';
+      pianoTrack.channel = 1;
+      pianoTrack.instrument.number = 0; // Acoustic Grand Piano
 
-    //   for (const chord of chords) {
-    //     const voicing = this._getChordVoicing(chord);
-    //     const velocity = 60 * energy.piano;
+      for (const chord of chords) {
+        const voicing = this._getChordVoicing(chord);
+        const velocity = 60 * energy.piano;
 
-    //     for (const pitch of voicing) {
-    //       pianoTrack.addNote({
-    //         midi: pitch,
-    //         time: chord.time,
-    //         duration: chord.duration * 0.9, // Slight staccato
-    //         velocity: velocity / 127,
-    //       });
-    //     }
-    //   }
-    // }
+        for (const pitch of voicing) {
+          pianoTrack.addNote({
+            midi: pitch,
+            time: chord.time,
+            duration: chord.duration * 0.9, // Slight staccato
+            velocity: velocity / 127,
+          });
+        }
+      }
+    }
 
     // Add bass track (if not solo-only mode)
     // DISABLED: Focus on metronome fixes first
