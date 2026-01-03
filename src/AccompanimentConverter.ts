@@ -1509,59 +1509,67 @@ export class AccompanimentConverter implements IMIDIConverter {
     // }
 
     // Add drum track (if not solo-only mode)
-    // DISABLED: Focus on metronome fixes first
-    // if (this._options.outputMode !== 'solo-only') {
-    //   const drumTrack = midi.addTrack();
-    //   drumTrack.name = 'Drums';
-    //   drumTrack.channel = 9; // Channel 10 (9 in 0-based) for drums
+    if (this._options.outputMode !== 'solo-only') {
+      console.log('[AccompanimentConverter] Adding drum track');
+      const drumTrack = midi.addTrack();
+      drumTrack.name = 'Drums';
+      drumTrack.channel = 9; // Channel 10 (9 in 0-based) for drums
 
-    //   const beatDuration = 60 / tempo;
+      // Use measure-based drumming that respects timemap
+      for (const chord of chords) {
+        const measureStart = chord.time;
+        const measureDuration = chord.duration;
+        const beatsInMeasure = Math.max(2, Math.round(measureDuration / 0.5)); // Estimate beats
+        const beatDuration = measureDuration / beatsInMeasure;
 
-    //   // Calculate total duration from both melody and chords to ensure full coverage
-    //   const melodyEndTime =
-    //     melodyNotes.length > 0
-    //       ? melodyNotes[melodyNotes.length - 1].time +
-    //         melodyNotes[melodyNotes.length - 1].duration
-    //       : 0;
-    //   const chordEndTime =
-    //     chords.length > 0
-    //       ? chords[chords.length - 1].time + chords[chords.length - 1].duration
-    //       : 0;
-    //   const totalDuration = Math.max(melodyEndTime, chordEndTime);
+        const baseVelocity = 80 * energy.drums;
 
-    //   for (let time = 0; time < totalDuration; time += beatDuration) {
-    //     const beat = Math.floor(time / beatDuration) % 4;
-    //     const velocity = 80 * energy.drums;
+        // Play drum pattern within each measure
+        for (let beat = 0; beat < beatsInMeasure; beat++) {
+          const beatTime = measureStart + beat * beatDuration;
+          const isDownbeat = beat === 0;
+          const isBackbeat = beat % 2 === 1; // Beats 2, 4, etc.
 
-    //     // Kick drum on beats 1 and 3
-    //     if (beat === 0 || beat === 2) {
-    //       drumTrack.addNote({
-    //         midi: 36, // Bass Drum 1
-    //         time,
-    //         duration: beatDuration * 0.3,
-    //         velocity: velocity / 127,
-    //       });
-    //     }
+          // Kick drum on downbeat and beat 3 (if 4/4)
+          if (isDownbeat || (beat === 2 && beatsInMeasure >= 4)) {
+            drumTrack.addNote({
+              midi: 36, // Bass Drum 1
+              time: beatTime,
+              duration: beatDuration * 0.3,
+              velocity: (baseVelocity * (isDownbeat ? 1.0 : 0.85)) / 127,
+            });
+          }
 
-    //     // Snare on beats 2 and 4
-    //     if (beat === 1 || beat === 3) {
-    //       drumTrack.addNote({
-    //         midi: 38, // Acoustic Snare
-    //         time,
-    //         duration: beatDuration * 0.3,
-    //         velocity: (velocity * 0.9) / 127,
-    //       });
-    //     }
+          // Snare on backbeats (2 and 4)
+          if (isBackbeat) {
+            drumTrack.addNote({
+              midi: 38, // Acoustic Snare
+              time: beatTime,
+              duration: beatDuration * 0.3,
+              velocity: (baseVelocity * 0.9) / 127,
+            });
+          }
 
-    //     // Hi-hat on every beat
-    //     drumTrack.addNote({
-    //       midi: 42, // Closed Hi-Hat
-    //       time,
-    //       duration: beatDuration * 0.2,
-    //       velocity: (velocity * 0.6) / 127,
-    //     });
-    //   }
-    // }
+          // Hi-hat on every beat
+          drumTrack.addNote({
+            midi: 42, // Closed Hi-Hat
+            time: beatTime,
+            duration: beatDuration * 0.25,
+            velocity: (baseVelocity * 0.6) / 127,
+          });
+
+          // Add hi-hat eighth notes for more groove
+          if (beatDuration > 0.3) {
+            drumTrack.addNote({
+              midi: 42, // Closed Hi-Hat
+              time: beatTime + beatDuration * 0.5,
+              duration: beatDuration * 0.2,
+              velocity: (baseVelocity * 0.45) / 127,
+            });
+          }
+        }
+      }
+    }
 
     // Convert to ArrayBuffer
     const midiArray = midi.toArray();
