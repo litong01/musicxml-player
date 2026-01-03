@@ -441,6 +441,15 @@ export class AccompanimentConverter implements IMIDIConverter {
         ? parts[0].measure
         : [parts[0].measure];
 
+      // Detect if measures use 0-based (pickup) or 1-based numbering
+      const firstMeasureNumber = measures[0]?.['@_number']
+        ? Number(measures[0]['@_number'])
+        : 0;
+      const measureOffset = firstMeasureNumber === 0 ? 0 : -1;
+      console.log(
+        `[Timemap] First measure number: ${firstMeasureNumber}, offset: ${measureOffset}`,
+      );
+
       // FIRST PASS: Build maps of time signatures and tempos by measure number
       // Priority: explicit changes > first occurrence's inherited value
       const originalTimeSignatures = new Map<
@@ -535,7 +544,7 @@ export class AccompanimentConverter implements IMIDIConverter {
 
         // Get measure number (0-based for timemap)
         const measureNumber = measure['@_number']
-          ? Number(measure['@_number']) - 1
+          ? Number(measure['@_number']) + measureOffset
           : i;
 
         // Look up the original tempo for this measure number
@@ -571,10 +580,42 @@ export class AccompanimentConverter implements IMIDIConverter {
             `Tempo ${hasExplicitTempo ? 'EXPLICIT' : 'LOOKUP'} ${currentTempo} BPM`,
         );
 
-        // Calculate measure duration in milliseconds
-        // Duration = (beats / beat_type) * 4 quarter notes * (60000ms/tempo)
-        const quarterNotes = (currentTimeBeats / currentBeatType) * 4;
+        // Calculate measure duration
+        let quarterNotes = (currentTimeBeats / currentBeatType) * 4;
         const msPerQuarterNote = 60000 / currentTempo;
+
+        // Special handling for measure 0 (pickup/anacrusis)
+        // Check if it's incomplete by summing actual note durations
+        if (measureNumber === 0 || measure['@_implicit'] === 'yes') {
+          let actualQuarters = 0;
+          let divisions = 1;
+
+          if (measure.attributes?.divisions) {
+            divisions = Number(measure.attributes.divisions);
+          }
+
+          if (measure.note) {
+            const measureNotes = Array.isArray(measure.note)
+              ? measure.note
+              : [measure.note];
+
+            for (const note of measureNotes) {
+              if (!note || note.chord) continue;
+              if (note.duration) {
+                actualQuarters += Number(note.duration) / divisions;
+              }
+            }
+          }
+
+          // If measure is shorter than expected (typical for pickup), use actual duration
+          if (actualQuarters > 0 && actualQuarters < quarterNotes - 0.01) {
+            console.log(
+              `  [PICKUP M${measureNumber}] Actual: ${actualQuarters.toFixed(2)}q vs Expected: ${quarterNotes.toFixed(2)}q - using actual`,
+            );
+            quarterNotes = actualQuarters;
+          }
+        }
+
         const measureDuration = Math.round(quarterNotes * msPerQuarterNote);
 
         timemap.push({
@@ -682,6 +723,12 @@ export class AccompanimentConverter implements IMIDIConverter {
           ? part.measure
           : [part.measure];
 
+        // Detect if measures use 0-based (pickup) or 1-based numbering
+        const firstMeasureNumber = partMeasures[0]?.['@_number']
+          ? Number(partMeasures[0]['@_number'])
+          : 0;
+        const measureOffset = firstMeasureNumber === 0 ? 0 : -1;
+
         // FIRST PASS: Build a map of time signatures by measure number
         // Priority: explicit time signature changes > first occurrence's inherited value
         const originalMeasureQuarters = new Map<
@@ -695,7 +742,7 @@ export class AccompanimentConverter implements IMIDIConverter {
           if (!measure) continue;
 
           const measureNumber = measure['@_number']
-            ? Number(measure['@_number']) - 1
+            ? Number(measure['@_number']) + measureOffset
             : i;
 
           // Check if this measure has an explicit time signature
@@ -736,7 +783,7 @@ export class AccompanimentConverter implements IMIDIConverter {
 
           // Get measure number
           const measureNumber = measure['@_number']
-            ? Number(measure['@_number']) - 1
+            ? Number(measure['@_number']) + measureOffset
             : i;
 
           // Get divisions from attributes
@@ -748,7 +795,29 @@ export class AccompanimentConverter implements IMIDIConverter {
           const measureQuartersEntry = originalMeasureQuarters.get(
             measureNumber,
           ) || { quarters: 4, explicit: false };
-          const currentMeasureQuarters = measureQuartersEntry.quarters;
+          let currentMeasureQuarters = measureQuartersEntry.quarters;
+
+          // For pickup measures, use actual duration from timemap instead of time signature
+          // The timemap already has the correct shortened duration for pickups
+          if (measureNumber === 0 || measure['@_implicit'] === 'yes') {
+            const timeSigQuarters = measureQuartersEntry.quarters;
+            const timeSigDurationMs = timemapEntry.duration;
+
+            // Back-calculate actual quarter notes from timemap duration
+            // We can derive this from the ratio of durations, or use tempo if available
+            // For now, use a simple ratio: actualQuarters = timeSigQuarters * (actualDuration / expectedDuration)
+            // At 120 BPM, one quarter note = 500ms
+            const fullMeasureDuration = (timeSigQuarters * 60000) / 120;
+            const actualQuarters =
+              (timeSigDurationMs / fullMeasureDuration) * timeSigQuarters;
+
+            if (actualQuarters > 0 && actualQuarters < timeSigQuarters - 0.01) {
+              console.log(
+                `[Note Extract M${measureNumber}] Pickup: using ${actualQuarters.toFixed(2)}q instead of ${timeSigQuarters.toFixed(2)}q`,
+              );
+              currentMeasureQuarters = actualQuarters;
+            }
+          }
 
           // Track position within measure (in quarter notes)
           let positionInMeasure = 0;
