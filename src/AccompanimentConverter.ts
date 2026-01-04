@@ -1143,46 +1143,87 @@ export class AccompanimentConverter implements IMIDIConverter {
         // Skip the bass note (leave for bass track), use mid-to-upper range
         const midVoicing = voicing.slice(1);
 
-        // Pattern: Broken chord arpeggio
-        midVoicing.forEach((pitch, index) => {
-          // Humanize velocity (slight random variation)
-          const velocityVariation = 0.9 + Math.random() * 0.2; // 90%-110%
-          const noteVelocity = (baseVelocity * velocityVariation) / 127;
+        // Human timing offset for the entire chord (-10ms to +10ms)
+        const chordTimingOffset = (Math.random() - 0.5) * 0.02;
 
-          // Arpeggio timing - stagger each note slightly
-          const arpeggioDelay = index * 0.02; // 20ms stagger
-          const noteTime = chord.time + arpeggioDelay;
+        // Pattern: Broken chord arpeggio with realistic humanization
+        midVoicing.forEach((pitch, index) => {
+          // More realistic velocity variation (80%-110%)
+          const velocityVariation = 0.8 + Math.random() * 0.3;
+          // Emphasize top note (melody) and bottom note
+          const isTopNote = index === midVoicing.length - 1;
+          const isBottomNote = index === 0;
+          const emphasisFactor = isTopNote ? 1.15 : isBottomNote ? 1.05 : 1.0;
+          const noteVelocity =
+            (baseVelocity * velocityVariation * emphasisFactor) / 127;
+
+          // Realistic arpeggio timing - fingers don't hit exactly evenly
+          const baseArpeggioDelay = index * 0.015; // 15ms base stagger
+          const timingJitter = (Math.random() - 0.5) * 0.01; // ±5ms jitter
+          const noteTime = Math.max(
+            0,
+            chord.time + chordTimingOffset + baseArpeggioDelay + timingJitter,
+          );
+
+          // Vary sustain slightly for more natural feel
+          const sustainVariation = 0.95 + Math.random() * 0.1;
 
           // First arpeggio sweep
           pianoTrack.addNote({
             midi: pitch,
             time: noteTime,
-            duration: chord.duration * 0.5, // Overlap for pedal effect
+            duration: chord.duration * 0.5 * sustainVariation,
             velocity: noteVelocity,
           });
 
-          // Second sweep (if measure is long enough)
+          // Second sweep (if measure is long enough) - with different character
           if (chord.duration > 1.0) {
-            const secondSweepTime =
-              chord.time + chord.duration * 0.5 + arpeggioDelay;
+            const secondSweepTime = Math.max(
+              0,
+              chord.time +
+                chord.duration * 0.5 +
+                baseArpeggioDelay +
+                (Math.random() - 0.5) * 0.015,
+            );
             pianoTrack.addNote({
               midi: pitch,
               time: secondSweepTime,
-              duration: chord.duration * 0.45,
-              velocity: noteVelocity * 0.85, // Slightly softer
+              duration: chord.duration * 0.45 * sustainVariation,
+              velocity: noteVelocity * (0.8 + Math.random() * 0.15), // More variation
             });
           }
         });
 
-        // Add occasional bass octave doubling for fuller sound
+        // Add occasional bass octave doubling with realistic timing
         if (i % 2 === 0 && voicing.length > 0) {
           const bassNote = voicing[0];
           const bassOctave = bassNote - 12; // One octave lower
+          const bassTimingOffset = (Math.random() - 0.5) * 0.015;
           pianoTrack.addNote({
             midi: bassOctave,
-            time: chord.time,
+            time: Math.max(
+              0,
+              chord.time + chordTimingOffset + bassTimingOffset,
+            ),
             duration: chord.duration * 0.4,
-            velocity: (baseVelocity * 1.1) / 127, // Slightly stronger
+            velocity:
+              ((baseVelocity * (1.05 + Math.random() * 0.1)) / 127) *
+              (0.95 + Math.random() * 0.1), // Humanized
+          });
+        }
+
+        // Add subtle inner voice movement for longer chords
+        if (chord.duration > 2.0 && midVoicing.length >= 2) {
+          const innerVoice = midVoicing[Math.floor(midVoicing.length / 2)];
+          const reArticulateTime = Math.max(
+            0,
+            chord.time + chord.duration * 0.6 + (Math.random() - 0.5) * 0.02,
+          );
+          pianoTrack.addNote({
+            midi: innerVoice,
+            time: reArticulateTime,
+            duration: chord.duration * 0.35,
+            velocity: (baseVelocity * (0.6 + Math.random() * 0.15)) / 127,
           });
         }
       }
