@@ -39,7 +39,7 @@ export function addMetronomeTrack(
   // Add metronome track
   const metronomeTrack = midi.addTrack();
   metronomeTrack.name = 'Metronome';
-  metronomeTrack.channel = 11; // Channel 12 (11 in 0-indexed) - avoiding channel 9 used by drums
+  metronomeTrack.channel = 9; // Drum channel - uses wood block sounds (notes 76-77)
 
   // If we have a timemap, use it for precise measure-based metronome
   if (timemap && timemap.length > 0) {
