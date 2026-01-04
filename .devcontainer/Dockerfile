@@ -1,4 +1,4 @@
-# Development container for TempoAide
+# Development container for MySoloBand
 FROM node:22-alpine
 
 # Install git and other useful development tools

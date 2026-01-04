@@ -1,5 +1,5 @@
 {
-  "name": "TempoAide Development",
+  "name": "MySoloBand Development",
   "dockerFile": "Dockerfile",
 
   // Configure VS Code settings and extensions for the container

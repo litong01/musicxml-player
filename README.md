@@ -1,4 +1,4 @@
-TempoAide
+MySoloBand
 =========
 
 [![npm](https://img.shields.io/npm/v/%40music-i18n%2Fmusicxml-player)](https://www.npmjs.com/package/@music-i18n/musicxml-player)

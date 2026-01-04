@@ -1,6 +1,6 @@
 {
-  "name": "TempoAide",
-  "short_name": "TempoAide",
+  "name": "MySoloBand",
+  "short_name": "MySoloBand",
   "description": "Play and view MusicXML scores with synchronized playback",
   "start_url": "/",
   "display": "standalone",
