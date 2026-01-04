@@ -1138,7 +1138,7 @@ export class AccompanimentConverter implements IMIDIConverter {
         }
         previousVoicing = voicing;
 
-        const baseVelocity = 60 * energy.piano;
+        const baseVelocity = 80 * energy.piano;
 
         // Skip the bass note (leave for bass track), use mid-to-upper range
         const midVoicing = voicing.slice(1);
@@ -1197,7 +1197,7 @@ export class AccompanimentConverter implements IMIDIConverter {
 
       for (const chord of chords) {
         const bassNote = 36 + (chord.root % 12); // Bass octave (E1-D#2 range)
-        const baseVelocity = 70 * energy.bass;
+        const baseVelocity = 90 * energy.bass;
 
         // Walking bass pattern for more interesting movement
         // Root on beat 1
@@ -1255,7 +1255,7 @@ export class AccompanimentConverter implements IMIDIConverter {
         }
         previousStringVoicing = voicing;
 
-        const baseVelocity = 50 * energy.strings; // Softer than piano for pad effect
+        const baseVelocity = 65 * energy.strings; // Softer than piano for pad effect
 
         // Strings play full chords with sustain and slight swell
         for (let i = 0; i < voicing.length; i++) {
@@ -1320,7 +1320,7 @@ export class AccompanimentConverter implements IMIDIConverter {
         const beatsInMeasure = Math.max(2, Math.round(measureDuration / 0.5)); // Estimate beats
         const beatDuration = measureDuration / beatsInMeasure;
 
-        const baseVelocity = 80 * energy.drums;
+        const baseVelocity = 100 * energy.drums;
 
         // Play drum pattern within each measure
         for (let beat = 0; beat < beatsInMeasure; beat++) {

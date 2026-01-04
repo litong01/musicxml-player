@@ -77,7 +77,7 @@ export function addMetronomeTrack(
 
         // Use different sounds for downbeat (first beat of measure) vs other beats
         const midiNote = isDownbeat ? 76 : 77; // High/Low Wood Block
-        const velocity = isDownbeat ? 127 : 110;
+        const velocity = isDownbeat ? 127 : 120;
 
         metronomeTrack.addNote({
           midi: midiNote,
@@ -102,7 +102,7 @@ export function addMetronomeTrack(
       // MIDI note 76 = High Wood Block (downbeat)
       // MIDI note 77 = Low Wood Block (other beats)
       const midiNote = isDownbeat ? 76 : 77;
-      const velocity = isDownbeat ? 127 : 110; // Maximum loudness for downbeat, very loud for other beats
+      const velocity = isDownbeat ? 127 : 120; // Maximum loudness for downbeat, very loud for other beats
 
       metronomeTrack.addNote({
         midi: midiNote,
