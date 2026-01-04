@@ -4,7 +4,11 @@ export interface AccompanimentOptions {
     introMode?: 'auto' | 'always' | 'none';
     introIntensity?: 'soft' | 'medium' | 'strong';
     bandEnergy?: 'soft' | 'medium' | 'strong';
-    outputMode?: 'solo-only' | 'band-only' | 'solo-and-band';
+    solo?: boolean;
+    piano?: boolean;
+    bass?: boolean;
+    strings?: boolean;
+    drums?: boolean;
     drummerPracticeMode?: boolean;
 }
 /**

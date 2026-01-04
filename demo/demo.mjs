@@ -100,7 +100,14 @@ const g_state = {
   musicXml: null,
   tuning: '',
   options: DEFAULT_OPTIONS,
-  accompanimentMode: 'solo-only', // 'solo-only', 'band-only', 'solo-and-band'
+  // Individual track selection (more flexible than presets)
+  tracks: {
+    solo: true,
+    piano: true,
+    bass: true,
+    strings: true,
+    drums: true,
+  },
   // Track the actual music source type
   currentMusicSource: 'samples', // 'samples', 'upload', 'url', 'playlist'
   // Playlist state
@@ -187,8 +194,8 @@ async function createPlayer() {
   console.log('[createPlayer] Final renderer after checks:', renderer);
   document.getElementById(`renderer-${renderer}`).checked = true;
 
-  // Auto-detect converter: prefer custom MIDI if available for solo-only mode,
-  // otherwise use AccompanimentConverter (which handles all modes)
+  // Auto-detect converter: prefer custom MIDI if available when only solo track is enabled,
+  // otherwise use AccompanimentConverter (which generates all enabled tracks)
   let hasMidiFile = false;
 
   // Check if custom MIDI file exists in data directory (skip for external URLs)
@@ -196,41 +203,33 @@ async function createPlayer() {
     .replace(/\.(musicxml|mxl|xml)$/i, '')
     .replace(/^data\//, '');
 
+  // Determine if we're in "solo only" mode (only melody, no band tracks)
+  const soloOnlyMode =
+    g_state.tracks.solo &&
+    !g_state.tracks.piano &&
+    !g_state.tracks.bass &&
+    !g_state.tracks.strings &&
+    !g_state.tracks.drums;
+
   // Only check for existing MIDI files if in solo-only mode
   // For band modes, we always need to generate with AccompanimentConverter
-  if (baseName !== 'remote-file' && g_state.accompanimentMode === 'solo-only') {
+  if (baseName !== 'remote-file' && soloOnlyMode) {
     try {
       const midiPath = base.replace(/\.\w+$/, '.mid');
       await fetish(midiPath, { method: 'HEAD' });
       hasMidiFile = true;
-      console.log(
-        '[createPlayer] Found .mid file on server (solo-only mode):',
-        midiPath,
-      );
     } catch {
       // No .mid file on server - will use AccompanimentConverter
-      console.log(
-        '[createPlayer] No .mid file found, will generate with AccompanimentConverter',
-      );
     }
-  } else if (g_state.accompanimentMode !== 'solo-only') {
-    console.log(
-      '[createPlayer] Band mode active - will use AccompanimentConverter',
-    );
   }
 
-  // Choose converter: use cached MIDI only for solo-only mode, otherwise generate with AccompanimentConverter
-  if (hasMidiFile && g_state.accompanimentMode === 'solo-only') {
+  // Choose converter: use cached MIDI only when solo-only, otherwise generate with AccompanimentConverter
+  if (hasMidiFile && soloOnlyMode) {
     // Use existing MIDI file for solo-only mode
     converter = 'midi';
-    console.log('[createPlayer] Using MIDI converter (cached MIDI file found)');
   } else {
-    // Generate MIDI with AccompanimentConverter (handles all accompaniment modes)
+    // Generate MIDI with AccompanimentConverter (handles all track combinations)
     converter = 'accomp';
-    console.log(
-      '[createPlayer] Using AccompanimentConverter with mode:',
-      g_state.accompanimentMode,
-    );
   }
 
   // Create new player.
@@ -378,7 +377,11 @@ async function createConverter(converter, sheet, groove, renderer) {
       // Use AccompanimentConverter to generate band accompaniment
       return new AccompanimentConverter({
         bandEnergy: 'medium',
-        outputMode: g_state.accompanimentMode || 'solo-and-band',
+        solo: g_state.tracks.solo,
+        piano: g_state.tracks.piano,
+        bass: g_state.tracks.bass,
+        strings: g_state.tracks.strings,
+        drums: g_state.tracks.drums,
         drummerPracticeMode: true,
       });
     case 'mma':
@@ -403,10 +406,11 @@ function handleRendererChange(e) {
   g_state.pendingSettings.renderer = e.target.value;
 }
 
-function handleAccompanimentChange(e) {
+function handleTrackChange(e) {
   // Settings are applied when modal closes, not immediately
   if (!g_state.pendingSettings) return;
-  g_state.pendingSettings.accompanimentMode = e.target.value;
+  const trackName = e.target.id.replace('track-', ''); // e.g., 'track-solo' -> 'solo'
+  g_state.pendingSettings.tracks[trackName] = e.target.checked;
 }
 
 function handleMusicSourceChange(e) {
@@ -434,7 +438,7 @@ function handleSettingsOpen() {
     urlValue: currentSheet.startsWith('http') ? currentSheet : '',
     playlistId: g_state.currentPlaylistId || '',
     renderer: currentRenderer,
-    accompanimentMode: g_state.accompanimentMode,
+    tracks: { ...g_state.tracks }, // Copy track settings
     options: { ...g_state.options },
   };
 
@@ -462,6 +466,13 @@ function handleSettingsOpen() {
     g_state.options.respectLineBreaks;
   document.getElementById('show-measure-numbers').checked =
     g_state.options.showMeasureNumbers;
+
+  // Set the track checkboxes to match current state
+  document.getElementById('track-solo').checked = g_state.tracks.solo;
+  document.getElementById('track-piano').checked = g_state.tracks.piano;
+  document.getElementById('track-bass').checked = g_state.tracks.bass;
+  document.getElementById('track-strings').checked = g_state.tracks.strings;
+  document.getElementById('track-drums').checked = g_state.tracks.drums;
 
   // Set the actual input values
   if (currentSource === 'samples') {
@@ -509,8 +520,14 @@ async function handleApplySettings() {
 
   // Track what changed to determine if we need to reload
   const rendererChanged = settings.renderer !== g_state.params.get('renderer');
-  const accompanimentChanged =
-    settings.accompanimentMode !== g_state.accompanimentMode;
+
+  // Check if any track selection changed
+  const tracksChanged =
+    settings.tracks.solo !== g_state.tracks.solo ||
+    settings.tracks.piano !== g_state.tracks.piano ||
+    settings.tracks.bass !== g_state.tracks.bass ||
+    settings.tracks.strings !== g_state.tracks.strings ||
+    settings.tracks.drums !== g_state.tracks.drums;
 
   // Check if any renderer options changed (these require reload)
   const currentOptions = g_state.options;
@@ -528,9 +545,9 @@ async function handleApplySettings() {
     g_state.params.set('renderer', settings.renderer);
   }
 
-  // Apply accompaniment mode
-  if (accompanimentChanged) {
-    g_state.accompanimentMode = settings.accompanimentMode;
+  // Apply track selection
+  if (tracksChanged) {
+    g_state.tracks = { ...settings.tracks };
     savePlayerOptions();
   }
 
@@ -572,7 +589,7 @@ async function handleApplySettings() {
   // musicSourceChanged == false: music source changed, handler already called createPlayer()
   if (
     musicSourceChanged &&
-    (rendererChanged || accompanimentChanged || renderOptionsChanged)
+    (rendererChanged || tracksChanged || renderOptionsChanged)
   ) {
     createPlayer();
   }
@@ -1252,7 +1269,7 @@ function savePlayerOptions() {
       JSON.stringify({
         params: [...g_state.params.entries()],
         options: g_state.options,
-        accompanimentMode: g_state.accompanimentMode,
+        tracks: g_state.tracks,
       }),
     );
   } catch (error) {
@@ -1832,11 +1849,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         showMeasureNumbers: stored.options?.showMeasureNumbers ?? false,
       };
       // Restore accompaniment mode
-      g_state.accompanimentMode = stored.accompanimentMode || 'solo-only';
+      g_state.tracks = stored.tracks || {
+        solo: true,
+        piano: true,
+        bass: true,
+        strings: true,
+        drums: true,
+      };
     } catch {
       g_state.params = new URLSearchParams();
       g_state.options = DEFAULT_OPTIONS;
-      g_state.accompanimentMode = 'solo-only';
+      g_state.tracks = {
+        solo: true,
+        piano: true,
+        bass: true,
+        strings: true,
+        drums: true,
+      };
     }
     // URL params override everything for authenticated users
     params.entries().forEach(([key, value]) => {
@@ -1871,15 +1900,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     input.addEventListener('change', handleRendererChange);
   });
 
-  // Set up accompaniment mode radio buttons - set checked state first
-  document.querySelectorAll('input[name="accompaniment"]').forEach((input) => {
-    if (input.value === g_state.accompanimentMode) {
-      input.checked = true;
-    }
-  });
-  // Add event listeners AFTER setting checked states
-  document.querySelectorAll('input[name="accompaniment"]').forEach((input) => {
-    input.addEventListener('change', handleAccompanimentChange);
+  // Set up track checkboxes - add event listeners
+  document.querySelectorAll('input[id^="track-"]').forEach((checkbox) => {
+    checkbox.addEventListener('change', handleTrackChange);
   });
 
   document.getElementById('play').addEventListener('click', async () => {

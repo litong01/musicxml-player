@@ -12,7 +12,12 @@ export interface AccompanimentOptions {
   introMode?: 'auto' | 'always' | 'none';
   introIntensity?: 'soft' | 'medium' | 'strong';
   bandEnergy?: 'soft' | 'medium' | 'strong';
-  outputMode?: 'solo-only' | 'band-only' | 'solo-and-band';
+  // Individual track selection (more flexible than presets)
+  solo?: boolean; // Melody track
+  piano?: boolean;
+  bass?: boolean;
+  strings?: boolean;
+  drums?: boolean;
   drummerPracticeMode?: boolean;
 }
 
@@ -45,8 +50,13 @@ export class AccompanimentConverter implements IMIDIConverter {
       introMode: options.introMode ?? 'auto',
       introIntensity: options.introIntensity ?? 'medium',
       bandEnergy: options.bandEnergy ?? 'medium',
-      outputMode: options.outputMode ?? 'solo-and-band',
-      drummerPracticeMode: options.drummerPracticeMode ?? true,
+      // Default: all tracks enabled (equivalent to old 'solo-and-band')
+      solo: options.solo ?? true,
+      piano: options.piano ?? true,
+      bass: options.bass ?? true,
+      strings: options.strings ?? true,
+      drums: options.drums ?? true,
+      drummerPracticeMode: options.drummerPracticeMode ?? false,
     };
   }
 
@@ -1086,8 +1096,8 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     const energy = energyMap[this._options.bandEnergy];
 
-    // Add original melody track (if not band-only mode)
-    if (this._options.outputMode !== 'band-only' && !isPercussion) {
+    // Add original melody track (if solo enabled)
+    if (this._options.solo && !isPercussion) {
       const melodyTrack = midi.addTrack();
       melodyTrack.name = 'Melody';
       melodyTrack.channel = 0;
@@ -1102,8 +1112,8 @@ export class AccompanimentConverter implements IMIDIConverter {
       }
     }
 
-    // Add piano track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
+    // Add piano track (if piano enabled)
+    if (this._options.piano) {
       const pianoTrack = midi.addTrack();
       pianoTrack.name = 'Piano';
       pianoTrack.channel = 1;
@@ -1178,8 +1188,8 @@ export class AccompanimentConverter implements IMIDIConverter {
       }
     }
 
-    // Add bass track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
+    // Add bass track (if bass enabled)
+    if (this._options.bass) {
       const bassTrack = midi.addTrack();
       bassTrack.name = 'Bass';
       bassTrack.channel = 2;
@@ -1227,8 +1237,8 @@ export class AccompanimentConverter implements IMIDIConverter {
       }
     }
 
-    // Add string pad track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
+    // Add string pad track (if strings enabled)
+    if (this._options.strings) {
       const stringsTrack = midi.addTrack();
       stringsTrack.name = 'Strings';
       stringsTrack.channel = 3;
@@ -1297,8 +1307,8 @@ export class AccompanimentConverter implements IMIDIConverter {
     //   }
     // }
 
-    // Add drum track (if not solo-only mode)
-    if (this._options.outputMode !== 'solo-only') {
+    // Add drum track (if drums enabled)
+    if (this._options.drums) {
       const drumTrack = midi.addTrack();
       drumTrack.name = 'Drums';
       drumTrack.channel = 9; // Channel 10 (9 in 0-based) for drums
