@@ -1,7 +1,7 @@
 {
-  "name": "MusicXML Player Development",
+  "name": "TempoAide Development",
   "dockerFile": "Dockerfile",
-  
+
   // Configure VS Code settings and extensions for the container
   "customizations": {
     "vscode": {

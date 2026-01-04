@@ -1,6 +1,6 @@
 {
-  "name": "MusicXML Player",
-  "short_name": "MusicXML",
+  "name": "TempoAide",
+  "short_name": "TempoAide",
   "description": "Play and view MusicXML scores with synchronized playback",
   "start_url": "/",
   "display": "standalone",
