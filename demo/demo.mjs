@@ -129,14 +129,12 @@ async function createPlayer() {
   const sheet = g_state.params.get('sheet');
   const output = g_state.params.get('output') ?? DEFAULT_OUTPUT;
   let renderer = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
-  console.log('[createPlayer] Initial renderer from params:', renderer);
   const groove = g_state.params.get('groove') ?? DEFAULT_GROOVE;
   let converter = g_state.params.get('converter') ?? DEFAULT_CONVERTER;
   const velocity = g_state.params.get('velocity') ?? DEFAULT_VELOCITY;
   const repeat = g_state.params.get('repeat') ?? DEFAULT_REPEAT;
   const transpose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
   const options = g_state.options;
-  console.log('[createPlayer] options.metronome:', options.metronome);
 
   // Reset UI elements.
   const samples = document.getElementById('samples');
@@ -196,7 +194,6 @@ async function createPlayer() {
       }
     }
   }
-  console.log('[createPlayer] Final renderer after checks:', renderer);
   document.getElementById(`renderer-${renderer}`).checked = true;
 
   // Auto-detect converter: prefer custom MIDI if available when only solo track is enabled,

@@ -148,7 +148,6 @@ export class AccompanimentConverter implements IMIDIConverter {
       notes,
       chords,
       tempo,
-      tempoChanges,
       isPercussion,
     );
 
@@ -1073,19 +1072,12 @@ export class AccompanimentConverter implements IMIDIConverter {
     melodyNotes: Note[],
     chords: Chord[],
     tempo: number,
-    tempoChanges: Array<{ time: number; bpm: number; measure: number }>,
     isPercussion: boolean,
   ): ArrayBuffer {
     const midi = new Midi();
 
     // Use constant tempo for now to avoid potential hanging issues
     midi.header.setTempo(tempo);
-
-    if (tempoChanges.length > 0) {
-      console.log(
-        `[AccompanimentConverter] Note: ${tempoChanges.length} tempo changes detected but not applied to MIDI (using constant ${tempo} BPM)`,
-      );
-    }
 
     // Energy settings
     const energyMap = {
