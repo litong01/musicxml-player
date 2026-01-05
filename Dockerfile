@@ -6,6 +6,15 @@ RUN npm install
 COPY . .
 RUN npm run build
 
+# Capture git hash at build time
+ARG BUILD_VERSION
+RUN if [ -z "$BUILD_VERSION" ]; then \
+      BUILD_VERSION=$(git rev-parse --short HEAD 2>/dev/null || date +%s); \
+      echo "$BUILD_VERSION" > /app/BUILD_VERSION; \
+    else \
+      echo "$BUILD_VERSION" > /app/BUILD_VERSION; \
+    fi
+
 # Stage 2: Production image with only runtime dependencies
 FROM node:22-alpine AS production
 WORKDIR /app
@@ -17,6 +26,10 @@ RUN npm install --omit=dev && npm cache clean --force
 # Copy built artifacts and demo files
 COPY --from=build /app/build ./build
 COPY --from=build /app/demo ./demo
+COPY --from=build /app/BUILD_VERSION ./BUILD_VERSION
+
+# Set BUILD_VERSION from file at runtime
+RUN BUILD_VERSION=$(cat BUILD_VERSION) && echo "export BUILD_VERSION=${BUILD_VERSION}" >> /etc/profile
 
 # Expose the default port
 EXPOSE 8082
