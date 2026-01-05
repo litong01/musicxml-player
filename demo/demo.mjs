@@ -217,7 +217,8 @@ async function createPlayer() {
   // - Must be solo-only mode
   // - Transpose must be 0 (no transposition)
   // - Metronome must be off
-  const canUseMidiFile = soloOnlyMode && transpose === 0 && !options.metronome;
+  const canUseMidiFile =
+    soloOnlyMode && Number(transpose) === 0 && !options.metronome;
 
   // Only check for existing MIDI files if we can use them
   if (baseName !== 'remote-file' && canUseMidiFile) {
@@ -949,16 +950,37 @@ async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
 
 /**
  * Ensure MIDI file exists for the given MusicXML file.
- * First tries to load from data directory, then generates using Verovio if not found.
+ * First tries to load from data directory (only if conditions allow),
+ * then generates using Verovio if not found.
  * @param {string} filename - Original MusicXML filename
  * @param {string} musicXml - MusicXML content
  */
 async function ensureMidiFile(filename, musicXml) {
   const baseName = filename.replace(/\.(musicxml|mxl|xml)$/i, '');
 
-  // Skip checking for MIDI file if this is an external URL (remote-file)
-  // We know it won't exist on the server
-  if (baseName !== 'remote-file') {
+  // Determine if we're in "solo only" mode
+  const soloOnlyMode =
+    g_state.tracks.solo &&
+    !g_state.tracks.piano &&
+    !g_state.tracks.bass &&
+    !g_state.tracks.strings &&
+    !g_state.tracks.drums;
+
+  // Get current transpose setting
+  const transpose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
+
+  // Get current metronome setting
+  const metronome = g_state.options.metronome ?? false;
+
+  // Check if we can use existing MIDI file:
+  // - Must be solo-only mode
+  // - Transpose must be 0 (no transposition)
+  // - Metronome must be off
+  const canUseMidiFile =
+    soloOnlyMode && Number(transpose) === 0 && !metronome;
+
+  // Only try to fetch existing MIDI file if conditions allow AND not a remote file
+  if (baseName !== 'remote-file' && canUseMidiFile) {
     const midiPath = `data/${baseName}.mid`;
 
     // Try to fetch existing MIDI file from data directory (suppress 404 errors)
