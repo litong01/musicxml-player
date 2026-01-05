@@ -38,7 +38,7 @@
     "build:snap": "vitest --update",
     "test:type": "tsc --noEmit",
     "demo:develop": "ws -d demo --rewrite '/mma/(.*) -> http://localhost:3000/$1' -p ${PORT:-8080}",
-    "demo:server": "node demo/generate-files-list.mjs && cd demo && ws -p ${PORT:-8082} -z -c lws.config.js",
+    "demo:server": "node demo/generate-files-list.mjs && cd demo && ws -p ${PORT:-8082} -z -c lws.config.mjs",
     "link": "run() { rm -rf node_modules/$1 && ln -s $(readlink -f $(npm root -g)/$1) node_modules/$1; }; run"
   },
   "repository": {
