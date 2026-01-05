@@ -200,7 +200,7 @@ async function createPlayer() {
   document.getElementById(`renderer-${renderer}`).checked = true;
 
   // Auto-detect converter: prefer custom MIDI if available when only solo track is enabled,
-  // otherwise use AccompanimentConverter (which generates all enabled tracks)
+  // transpose is 0, and metronome is off - otherwise use AccompanimentConverter
   let hasMidiFile = false;
 
   // Check if custom MIDI file exists in data directory (skip for external URLs)
@@ -216,9 +216,14 @@ async function createPlayer() {
     !g_state.tracks.strings &&
     !g_state.tracks.drums;
 
-  // Only check for existing MIDI files if in solo-only mode
-  // For band modes, we always need to generate with AccompanimentConverter
-  if (baseName !== 'remote-file' && soloOnlyMode) {
+  // Check if we can use existing MIDI file:
+  // - Must be solo-only mode
+  // - Transpose must be 0 (no transposition)
+  // - Metronome must be off
+  const canUseMidiFile = soloOnlyMode && transpose === 0 && !options.metronome;
+
+  // Only check for existing MIDI files if we can use them
+  if (baseName !== 'remote-file' && canUseMidiFile) {
     try {
       const midiPath = base.replace(/\.\w+$/, '.mid');
       await fetish(midiPath, { method: 'HEAD' });
@@ -228,12 +233,12 @@ async function createPlayer() {
     }
   }
 
-  // Choose converter: use cached MIDI only when solo-only, otherwise generate with AccompanimentConverter
-  if (hasMidiFile && soloOnlyMode) {
-    // Use existing MIDI file for solo-only mode
+  // Choose converter: use cached MIDI only when all conditions are met, otherwise generate with AccompanimentConverter
+  if (hasMidiFile && canUseMidiFile) {
+    // Use existing MIDI file for solo-only mode with no transpose and no metronome
     converter = 'midi';
   } else {
-    // Generate MIDI with AccompanimentConverter (handles all track combinations)
+    // Generate MIDI with AccompanimentConverter (handles all track combinations, transpose, and metronome)
     converter = 'accomp';
   }
 
