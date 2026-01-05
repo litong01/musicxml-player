@@ -11,4 +11,5 @@ export * from './add-metronome';
 export * from './remove-fermatas';
 export * from './preprocess-musicxml';
 export * from './normalize-measures';
+export * from './transpose-musicxml';
 //# sourceMappingURL=index.d.ts.map

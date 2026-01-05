@@ -15,6 +15,7 @@ import {
   parseMusicXmlTimemap,
   SaxonJSProcessor,
   convertUnpitchedToPitched,
+  transposeMusicXml,
 } from './build/musicxml-player.mjs';
 import {
   Playlist,
@@ -30,6 +31,7 @@ const DEFAULT_GROOVE = 'Default';
 const DEFAULT_CONVERTER = 'vrv';
 const DEFAULT_VELOCITY = 1;
 const DEFAULT_REPEAT = 0;
+const DEFAULT_TRANSPOSE = 0;
 
 // Intercept Verovio font loading errors and downgrade to warnings
 const originalError = console.error;
@@ -98,6 +100,7 @@ const g_state = {
   player: null,
   params: null,
   musicXml: null,
+  originalMusicXml: null, // Store original untransposed MusicXML
   tuning: '',
   options: DEFAULT_OPTIONS,
   // Individual track selection (more flexible than presets)
@@ -131,6 +134,7 @@ async function createPlayer() {
   let converter = g_state.params.get('converter') ?? DEFAULT_CONVERTER;
   const velocity = g_state.params.get('velocity') ?? DEFAULT_VELOCITY;
   const repeat = g_state.params.get('repeat') ?? DEFAULT_REPEAT;
+  const transpose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
   const options = g_state.options;
   console.log('[createPlayer] options.metronome:', options.metronome);
 
@@ -156,6 +160,7 @@ async function createPlayer() {
   }
   document.getElementById('velocity').value = velocity;
   document.getElementById('repeat').value = repeat;
+  document.getElementById('transpose').value = transpose;
 
   // Detect renderer and converter possibilities based on sheet.
   const base =
@@ -570,6 +575,23 @@ async function handleApplySettings() {
     }
   }
 
+  // Check if transpose changed (requires player recreation)
+  const currentTranspose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
+  const transposeChanged =
+    settings.transpose !== undefined &&
+    Number(settings.transpose) !== Number(currentTranspose);
+
+  if (settings.transpose !== undefined) {
+    g_state.params.set('transpose', settings.transpose);
+    // Re-transpose from original MusicXML
+    if (g_state.originalMusicXml) {
+      g_state.musicXml = transposeMusicXml(
+        g_state.originalMusicXml,
+        Number(settings.transpose),
+      );
+    }
+  }
+
   // Apply mute to existing player if it exists (can be changed without reload)
   if (g_state.player) {
     g_state.player.mute = settings.options.mute;
@@ -589,7 +611,10 @@ async function handleApplySettings() {
   // musicSourceChanged == false: music source changed, handler already called createPlayer()
   if (
     musicSourceChanged &&
-    (rendererChanged || tracksChanged || renderOptionsChanged)
+    (rendererChanged ||
+      tracksChanged ||
+      renderOptionsChanged ||
+      transposeChanged)
   ) {
     createPlayer();
   }
@@ -800,10 +825,14 @@ async function handleSampleSelect(e) {
       const playlist = new Playlist(ireal);
       if (playlist.songs.length > 0) {
         const song = playlist.songs[0];
-        g_state.musicXml = Converter.convert(song, {
+        const musicXml = Converter.convert(song, {
           notation: 'rhythmic',
           date: false,
         });
+        // Store original and apply transposition
+        g_state.originalMusicXml = musicXml;
+        const transpose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
+        g_state.musicXml = transposeMusicXml(musicXml, Number(transpose));
         g_state.params.set('sheet', sheet);
         g_state.params.set('groove', DEFAULT_GROOVE);
         createPlayer();
@@ -881,7 +910,13 @@ async function handleIRealChange(e) {
 async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
   try {
     const parseResult = await parseMusicXml(buffer, new SaxonJSProcessor());
-    g_state.musicXml = parseResult.musicXml;
+    // Store original and apply transposition
+    g_state.originalMusicXml = parseResult.musicXml;
+    const transpose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
+    g_state.musicXml = transposeMusicXml(
+      parseResult.musicXml,
+      Number(transpose),
+    );
     g_state.params.set('sheet', filename);
 
     const baseName = filename.replace(/\.(musicxml|mxl|xml)$/i, '');
@@ -889,7 +924,7 @@ async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
     // Only delete cache and generate MIDI if user didn't provide MIDI file
     if (!skipCacheDelete) {
       await deleteMidiFile(baseName);
-      await ensureMidiFile(filename, parseResult.musicXml);
+      await ensureMidiFile(filename, g_state.musicXml);
     }
 
     // For URL-loaded files, try using MuseScore converter which works better with OSMD renderer
@@ -1260,6 +1295,28 @@ function handleRepeatChange(e) {
       e.target.value === '-1' ? Infinity : Number(e.target.value);
   }
   savePlayerOptions();
+}
+
+function handleTransposeChange(e) {
+  // Store in pending settings if modal is open
+  if (g_state.pendingSettings) {
+    g_state.pendingSettings.transpose = e.target.value;
+    return;
+  }
+
+  g_state.params.set('transpose', e.target.value);
+  savePlayerOptions();
+
+  // Re-transpose from original MusicXML
+  if (g_state.originalMusicXml) {
+    g_state.musicXml = transposeMusicXml(
+      g_state.originalMusicXml,
+      Number(e.target.value),
+    );
+  }
+
+  // Recreate player with newly transposed MusicXML
+  createPlayer();
 }
 
 function savePlayerOptions() {
@@ -1976,6 +2033,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document
     .getElementById('repeat')
     .addEventListener('change', handleRepeatChange);
+  document
+    .getElementById('transpose')
+    .addEventListener('change', handleTransposeChange);
 
   // Playlist selection
   document.getElementById('active-playlist').addEventListener('change', (e) => {
