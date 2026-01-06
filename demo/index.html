@@ -269,6 +269,15 @@
         width: 80px;
         padding: 5px;
       }
+      /* Hide native number input spinners since we have custom +/- buttons */
+      .settings-section input[type='number']::-webkit-inner-spin-button,
+      .settings-section input[type='number']::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .settings-section input[type='number'] {
+        -moz-appearance: textfield;
+      }
       .settings-section small {
         color: #666;
         display: block;
@@ -803,6 +812,20 @@
           <div style="font-weight: bold; margin-bottom: 10px">Transpose:</div>
           <div style="margin-left: 20px">
             <div style="display: flex; align-items: center; gap: 8px">
+              <button
+                type="button"
+                id="transpose-decrease"
+                style="
+                  padding: 5px 10px;
+                  font-size: 1em;
+                  cursor: pointer;
+                  background-color: #b8860b;
+                  color: white;
+                  border: none;
+                  border-radius: 3px;
+                ">
+                −
+              </button>
               <input
                 type="number"
                 id="transpose"
@@ -811,7 +834,21 @@
                 min="-12"
                 max="12"
                 step="1"
-                style="width: 70px; padding: 5px" />
+                style="width: 70px; padding: 5px; text-align: center" />
+              <button
+                type="button"
+                id="transpose-increase"
+                style="
+                  padding: 5px 10px;
+                  font-size: 1em;
+                  cursor: pointer;
+                  background-color: #b8860b;
+                  color: white;
+                  border: none;
+                  border-radius: 3px;
+                ">
+                +
+              </button>
               <span style="color: #666">half tones (semitones)</span>
             </div>
             <div style="margin-top: 8px; font-size: 0.9em; color: #666">
@@ -833,6 +870,20 @@
               <label for="velocity" style="margin: 0; font-weight: bold"
                 >Velocity:</label
               >
+              <button
+                type="button"
+                id="velocity-decrease"
+                style="
+                  padding: 5px 10px;
+                  font-size: 1em;
+                  cursor: pointer;
+                  background-color: #b8860b;
+                  color: white;
+                  border: none;
+                  border-radius: 3px;
+                ">
+                −
+              </button>
               <input
                 type="number"
                 id="velocity"
@@ -841,7 +892,21 @@
                 min="0.25"
                 max="3"
                 step="0.25"
-                style="width: 70px" />
+                style="width: 70px; text-align: center" />
+              <button
+                type="button"
+                id="velocity-increase"
+                style="
+                  padding: 5px 10px;
+                  font-size: 1em;
+                  cursor: pointer;
+                  background-color: #b8860b;
+                  color: white;
+                  border: none;
+                  border-radius: 3px;
+                ">
+                +
+              </button>
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px">

@@ -976,8 +976,7 @@ async function ensureMidiFile(filename, musicXml) {
   // - Must be solo-only mode
   // - Transpose must be 0 (no transposition)
   // - Metronome must be off
-  const canUseMidiFile =
-    soloOnlyMode && Number(transpose) === 0 && !metronome;
+  const canUseMidiFile = soloOnlyMode && Number(transpose) === 0 && !metronome;
 
   // Only try to fetch existing MIDI file if conditions allow AND not a remote file
   if (baseName !== 'remote-file' && canUseMidiFile) {
@@ -2060,6 +2059,52 @@ document.addEventListener('DOMContentLoaded', async () => {
   document
     .getElementById('transpose')
     .addEventListener('change', handleTransposeChange);
+
+  // Transpose increment/decrement buttons
+  document
+    .getElementById('transpose-decrease')
+    .addEventListener('click', () => {
+      const input = document.getElementById('transpose');
+      const currentValue = parseFloat(input.value) || 0;
+      const min = parseFloat(input.min);
+      const step = parseFloat(input.step) || 1;
+      const newValue = Math.max(min, currentValue - step);
+      input.value = newValue;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+  document
+    .getElementById('transpose-increase')
+    .addEventListener('click', () => {
+      const input = document.getElementById('transpose');
+      const currentValue = parseFloat(input.value) || 0;
+      const max = parseFloat(input.max);
+      const step = parseFloat(input.step) || 1;
+      const newValue = Math.min(max, currentValue + step);
+      input.value = newValue;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+  // Velocity increment/decrement buttons
+  document.getElementById('velocity-decrease').addEventListener('click', () => {
+    const input = document.getElementById('velocity');
+    const currentValue = parseFloat(input.value) || 1;
+    const min = parseFloat(input.min);
+    const step = parseFloat(input.step) || 0.25;
+    const newValue = Math.max(min, currentValue - step);
+    input.value = newValue;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  document.getElementById('velocity-increase').addEventListener('click', () => {
+    const input = document.getElementById('velocity');
+    const currentValue = parseFloat(input.value) || 1;
+    const max = parseFloat(input.max);
+    const step = parseFloat(input.step) || 0.25;
+    const newValue = Math.min(max, currentValue + step);
+    input.value = newValue;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
 
   // Playlist selection
   document.getElementById('active-playlist').addEventListener('change', (e) => {
