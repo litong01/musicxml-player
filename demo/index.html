@@ -278,6 +278,23 @@
       .settings-section input[type='number'] {
         -moz-appearance: textfield;
       }
+      /* Style for increment/decrement buttons */
+      .number-control-btn {
+        padding: 5px 10px;
+        font-size: 1em;
+        cursor: pointer;
+        background-color: #b8860b;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .number-control-btn:active {
+        background-color: #8b6914;
+        transform: scale(0.95);
+      }
       .settings-section small {
         color: #666;
         display: block;
@@ -815,15 +832,7 @@
               <button
                 type="button"
                 id="transpose-decrease"
-                style="
-                  padding: 5px 10px;
-                  font-size: 1em;
-                  cursor: pointer;
-                  background-color: #b8860b;
-                  color: white;
-                  border: none;
-                  border-radius: 3px;
-                ">
+                class="number-control-btn">
                 −
               </button>
               <input
@@ -838,15 +847,7 @@
               <button
                 type="button"
                 id="transpose-increase"
-                style="
-                  padding: 5px 10px;
-                  font-size: 1em;
-                  cursor: pointer;
-                  background-color: #b8860b;
-                  color: white;
-                  border: none;
-                  border-radius: 3px;
-                ">
+                class="number-control-btn">
                 +
               </button>
               <span style="color: #666">half tones (semitones)</span>
@@ -873,15 +874,7 @@
               <button
                 type="button"
                 id="velocity-decrease"
-                style="
-                  padding: 5px 10px;
-                  font-size: 1em;
-                  cursor: pointer;
-                  background-color: #b8860b;
-                  color: white;
-                  border: none;
-                  border-radius: 3px;
-                ">
+                class="number-control-btn">
                 −
               </button>
               <input
@@ -896,15 +889,7 @@
               <button
                 type="button"
                 id="velocity-increase"
-                style="
-                  padding: 5px 10px;
-                  font-size: 1em;
-                  cursor: pointer;
-                  background-color: #b8860b;
-                  color: white;
-                  border: none;
-                  border-radius: 3px;
-                ">
+                class="number-control-btn">
                 +
               </button>
             </div>

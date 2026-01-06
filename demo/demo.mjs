@@ -2061,32 +2061,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     .addEventListener('change', handleTransposeChange);
 
   // Transpose increment/decrement buttons
-  document
-    .getElementById('transpose-decrease')
-    .addEventListener('click', () => {
-      const input = document.getElementById('transpose');
-      const currentValue = parseFloat(input.value) || 0;
-      const min = parseFloat(input.min);
-      const step = parseFloat(input.step) || 1;
-      const newValue = Math.max(min, currentValue - step);
-      input.value = newValue;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+  const transposeDecrease = document.getElementById('transpose-decrease');
+  const transposeIncrease = document.getElementById('transpose-increase');
+  const velocityDecrease = document.getElementById('velocity-decrease');
+  const velocityIncrease = document.getElementById('velocity-increase');
 
-  document
-    .getElementById('transpose-increase')
-    .addEventListener('click', () => {
-      const input = document.getElementById('transpose');
-      const currentValue = parseFloat(input.value) || 0;
-      const max = parseFloat(input.max);
-      const step = parseFloat(input.step) || 1;
-      const newValue = Math.min(max, currentValue + step);
-      input.value = newValue;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+  const handleTransposeDecrease = (e) => {
+    console.log('Transpose decrease triggered:', e.type, 'Current:', document.getElementById('transpose').value);
+    e.preventDefault();
+    const input = document.getElementById('transpose');
+    const currentValue = parseFloat(input.value) || 0;
+    const min = parseFloat(input.min);
+    const step = parseFloat(input.step) || 1;
+    const newValue = Math.max(min, currentValue - step);
+    input.value = newValue;
+    console.log('Transpose new value:', newValue);
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
 
-  // Velocity increment/decrement buttons
-  document.getElementById('velocity-decrease').addEventListener('click', () => {
+  const handleTransposeIncrease = (e) => {
+    console.log('Transpose increase triggered:', e.type, 'Current:', document.getElementById('transpose').value);
+    e.preventDefault();
+    const input = document.getElementById('transpose');
+    const currentValue = parseFloat(input.value) || 0;
+    const max = parseFloat(input.max);
+    const step = parseFloat(input.step) || 1;
+    const newValue = Math.min(max, currentValue + step);
+    input.value = newValue;
+    console.log('Transpose new value:', newValue);
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  const handleVelocityDecrease = (e) => {
+    e.preventDefault();
     const input = document.getElementById('velocity');
     const currentValue = parseFloat(input.value) || 1;
     const min = parseFloat(input.min);
@@ -2094,9 +2101,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newValue = Math.max(min, currentValue - step);
     input.value = newValue;
     input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  };
 
-  document.getElementById('velocity-increase').addEventListener('click', () => {
+  const handleVelocityIncrease = (e) => {
+    e.preventDefault();
     const input = document.getElementById('velocity');
     const currentValue = parseFloat(input.value) || 1;
     const max = parseFloat(input.max);
@@ -2104,7 +2112,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newValue = Math.min(max, currentValue + step);
     input.value = newValue;
     input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  };
+
+  // Add both click and touchend listeners for mobile support
+  transposeDecrease.addEventListener('click', handleTransposeDecrease);
+  transposeDecrease.addEventListener('touchend', handleTransposeDecrease);
+  transposeIncrease.addEventListener('click', handleTransposeIncrease);
+  transposeIncrease.addEventListener('touchend', handleTransposeIncrease);
+  velocityDecrease.addEventListener('click', handleVelocityDecrease);
+  velocityDecrease.addEventListener('touchend', handleVelocityDecrease);
+  velocityIncrease.addEventListener('click', handleVelocityIncrease);
+  velocityIncrease.addEventListener('touchend', handleVelocityIncrease);
 
   // Playlist selection
   document.getElementById('active-playlist').addEventListener('change', (e) => {
