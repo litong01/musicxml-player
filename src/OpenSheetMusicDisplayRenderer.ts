@@ -140,7 +140,6 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     // If we've processed all entries but now receiving a new moveTo call,
     // it means playback has restarted or user clicked - reset the tracking
     if (this._processedTimemapEntries.size >= this._timemap.length) {
-      console.log('[OSMD] Resetting processed entries for new playback/seek');
       this._processedTimemapEntries.clear();
     }
 
@@ -221,13 +220,6 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
           this._currentVoiceEntryIndex !== v
         ) {
           this._updateCursor(index, v);
-        }
-
-        // After updating cursor, check if we've now processed all entries
-        if (this._processedTimemapEntries.size >= this._timemap.length) {
-          console.log(
-            `[OSMD] Processed all ${this._timemap.length} timemap entries, stopping cursor updates`,
-          );
         }
 
         return;

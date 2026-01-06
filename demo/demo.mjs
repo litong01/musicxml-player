@@ -125,6 +125,12 @@ async function createPlayer() {
   // Destroy previous player.
   g_state.player?.destroy();
 
+  // Reset play/pause button to play icon for new piece
+  const playPauseBtn = document.getElementById('play-pause');
+  if (playPauseBtn) {
+    playPauseBtn.textContent = '▶';
+  }
+
   // Set the player parameters.
   const sheet = g_state.params.get('sheet');
   const output = g_state.params.get('output') ?? DEFAULT_OUTPUT;
@@ -763,10 +769,13 @@ function handleConverterChange(e) {
 function handlePlayPauseKey(e) {
   if (e.key === ' ' && g_state.player) {
     e.preventDefault();
+    const playPauseBtn = document.getElementById('play-pause');
     if (g_state.player.state === PLAYER_PLAYING) {
       g_state.player.pause();
+      playPauseBtn.textContent = '▶';
     } else {
       g_state.player.play();
+      playPauseBtn.textContent = '⏸';
     }
   }
 }
@@ -1530,14 +1539,19 @@ function setupPlaylistAutoAdvance() {
     playbackMonitorInterval = null;
   }
 
-  // Only set up monitoring if we're in playlist mode
-  if (!g_state.currentPlaylist || !g_state.player) return;
+  // Set up monitoring for any player (not just playlist mode)
+  if (!g_state.player) {
+    console.log('No player, skipping monitor setup');
+    return;
+  }
 
   wasPlaying = false;
+  let lastPlayerState = null; // Track previous player state
 
   // Monitor playback state
   playbackMonitorInterval = setInterval(() => {
-    if (!g_state.player || !g_state.currentPlaylist) {
+    if (!g_state.player) {
+      console.log('Player gone, stopping monitor');
       clearInterval(playbackMonitorInterval);
       playbackMonitorInterval = null;
       return;
@@ -1547,6 +1561,33 @@ function setupPlaylistAutoAdvance() {
     const position = g_state.player.position;
     const duration = g_state.player.duration;
 
+    // When playing and position reaches duration, the player doesn't auto-pause
+    // We need to detect this and pause manually
+    if (isPlaying && duration > 0 && position >= duration - 1) {
+      g_state.player.pause();
+      g_state.player.rewind();
+
+      // Update button immediately
+      const playPauseBtn = document.getElementById('play-pause');
+      if (playPauseBtn) {
+        playPauseBtn.textContent = '▶';
+      }
+      return; // Skip rest of this iteration
+    }
+
+    // Track current state for next iteration
+    lastPlayerState = g_state.player.state;
+
+    // Update play/pause button to match current state
+    const playPauseBtn = document.getElementById('play-pause');
+    if (playPauseBtn) {
+      const currentIcon = playPauseBtn.textContent;
+      const expectedIcon = isPlaying ? '⏸' : '▶';
+      if (currentIcon !== expectedIcon) {
+        playPauseBtn.textContent = expectedIcon;
+      }
+    }
+
     // Detect when playback stops after being in playing state
     // Check if we're within 100ms of the end
     if (
@@ -1555,15 +1596,22 @@ function setupPlaylistAutoAdvance() {
       duration > 0 &&
       position >= duration - 0.1
     ) {
-      console.log('Song finished, auto-advancing to next song');
       wasPlaying = false;
 
-      // Auto-advance to next song
-      if (g_state.currentSongIndex < g_state.currentPlaylist.urls.length - 1) {
-        playNextSong();
+      // Auto-advance to next song only if in playlist mode
+      if (g_state.currentPlaylist) {
+        console.log('Song finished, auto-advancing to next song');
+        if (
+          g_state.currentSongIndex <
+          g_state.currentPlaylist.urls.length - 1
+        ) {
+          playNextSong();
+        } else {
+          console.log('Reached end of playlist');
+          updatePlaylistDisplay();
+        }
       } else {
-        console.log('Reached end of playlist');
-        updatePlaylistDisplay();
+        console.log('Song finished');
       }
     } else {
       wasPlaying = isPlaying;
@@ -1985,20 +2033,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkbox.addEventListener('change', handleTrackChange);
   });
 
-  document.getElementById('play').addEventListener('click', async () => {
+  // Play/Pause toggle button
+  const playPauseBtn = document.getElementById('play-pause');
+  playPauseBtn.addEventListener('click', async () => {
     if (g_state.player) {
       try {
-        g_state.player.play();
+        // Check the actual player state, not our cached state
+        if (g_state.player.state === PLAYER_PLAYING) {
+          g_state.player.pause();
+          playPauseBtn.textContent = '▶';
+        } else {
+          g_state.player.play();
+          playPauseBtn.textContent = '⏸';
+        }
       } catch (error) {
-        console.error('Error calling player.play():', error);
+        console.error('Error toggling play/pause:', error);
       }
     }
   });
-  document.getElementById('pause').addEventListener('click', async () => {
-    g_state.player?.pause();
-  });
   document.getElementById('rewind').addEventListener('click', async () => {
     g_state.player?.rewind();
+    // Reset to play icon since rewinding pauses
+    const playPauseBtn = document.getElementById('play-pause');
+    if (playPauseBtn) {
+      playPauseBtn.textContent = '▶';
+    }
   });
 
   // Playlist navigation buttons
@@ -2067,7 +2126,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const velocityIncrease = document.getElementById('velocity-increase');
 
   const handleTransposeDecrease = (e) => {
-    console.log('Transpose decrease triggered:', e.type, 'Current:', document.getElementById('transpose').value);
+    console.log(
+      'Transpose decrease triggered:',
+      e.type,
+      'Current:',
+      document.getElementById('transpose').value,
+    );
     e.preventDefault();
     const input = document.getElementById('transpose');
     const currentValue = parseFloat(input.value) || 0;
@@ -2080,7 +2144,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const handleTransposeIncrease = (e) => {
-    console.log('Transpose increase triggered:', e.type, 'Current:', document.getElementById('transpose').value);
+    console.log(
+      'Transpose increase triggered:',
+      e.type,
+      'Current:',
+      document.getElementById('transpose').value,
+    );
     e.preventDefault();
     const input = document.getElementById('transpose');
     const currentValue = parseFloat(input.value) || 0;
