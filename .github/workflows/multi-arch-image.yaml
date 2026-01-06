@@ -11,10 +11,10 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: musicxml-player
+  IMAGE_NAME: mysoloband
   IMAGE_TAG: latest
   IMAGE_REGISTRY: docker.io
-  IMAGE_NAMESPACE: tli551
+  IMAGE_NAMESPACE: email4tong
 
 jobs:
   build:
