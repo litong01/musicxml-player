@@ -1,0 +1,55 @@
+<svg
+  width="100"
+  height="100"
+  viewBox="0 0 100 100"
+  xmlns="http://www.w3.org/2000/svg">
+  <!-- Musical note -->
+  <path
+    d="M70 20 L70 65 Q70 75 60 75 Q50 75 50 65 Q50 55 60 55 Q65 55 70 58 L70 30 L85 25 L85 53 Q85 63 75 63 Q65 63 65 53 Q65 43 75 43 Q80 43 85 46 L85 20 Z"
+    fill="#b8860b"
+    stroke="#8b6914"
+    stroke-width="2" />
+  <!-- Staff lines -->
+  <line
+    x1="15"
+    y1="35"
+    x2="45"
+    y2="35"
+    stroke="#b8860b"
+    stroke-width="1.5" />
+  <line
+    x1="15"
+    y1="42"
+    x2="45"
+    y2="42"
+    stroke="#b8860b"
+    stroke-width="1.5" />
+  <line
+    x1="15"
+    y1="49"
+    x2="45"
+    y2="49"
+    stroke="#b8860b"
+    stroke-width="1.5" />
+  <line
+    x1="15"
+    y1="56"
+    x2="45"
+    y2="56"
+    stroke="#b8860b"
+    stroke-width="1.5" />
+  <line
+    x1="15"
+    y1="63"
+    x2="45"
+    y2="63"
+    stroke="#b8860b"
+    stroke-width="1.5" />
+  <!-- Treble clef -->
+  <path
+    d="M25 45 Q25 38 30 35 Q32 38 30 42 Q28 45 25 45 M30 42 L30 60 Q28 65 25 65 Q22 65 22 62 Q22 59 25 59 Q27 59 28 60"
+    fill="none"
+    stroke="#b8860b"
+    stroke-width="2"
+    stroke-linecap="round" />
+</svg>
