@@ -29,16 +29,16 @@ class AuthManager {
 
     try {
       this.client = await createKindeClient(KINDE_CONFIG);
-      
+
       // Check if returning from OAuth callback
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('code') || urlParams.has('state')) {
         await this.handleCallback();
       }
-      
+
       // Check authentication status
       await this.checkAuth();
-      
+
       return true;
     } catch (error) {
       console.error('Failed to initialize auth:', error);
@@ -55,13 +55,24 @@ class AuthManager {
   async handleCallback() {
     try {
       await this.client.handleRedirectToApp();
-      
+
       // Clean up URL
       const url = new URL(window.location);
       url.search = '';
       window.history.replaceState({}, document.title, url);
-      
+
       await this.checkAuth();
+
+      // Dispatch custom event to notify the app that auth callback is complete
+      // This allows the app to completely re-initialize the UI and player
+      console.log(
+        'Auth callback complete, dispatching auth-callback-complete event',
+      );
+      window.dispatchEvent(
+        new CustomEvent('auth-callback-complete', {
+          detail: { user: this.user, isAuthenticated: this.isAuthenticated },
+        }),
+      );
     } catch (error) {
       console.error('Callback handling failed:', error);
       throw error;
@@ -74,24 +85,26 @@ class AuthManager {
   async checkAuth() {
     try {
       this.isAuthenticated = await this.client.isAuthenticated();
-      
+
       if (this.isAuthenticated) {
         this.user = await this.client.getUser();
-        
+
         // Some Kinde SDK versions don't have getClaims/getPermissions
         // Use try-catch for each method
         try {
-          this.claims = await this.client.getClaim?.() || {};
+          this.claims = (await this.client.getClaim?.()) || {};
         } catch (e) {
           this.claims = {};
         }
-        
+
         try {
-          this.permissions = await this.client.getPermission?.() || { permissions: [] };
+          this.permissions = (await this.client.getPermission?.()) || {
+            permissions: [],
+          };
         } catch (e) {
           this.permissions = { permissions: [] };
         }
-        
+
         // Store in session for quick access
         sessionStorage.setItem('user', JSON.stringify(this.user));
         sessionStorage.setItem('permissions', JSON.stringify(this.permissions));
@@ -102,7 +115,7 @@ class AuthManager {
         sessionStorage.removeItem('user');
         sessionStorage.removeItem('permissions');
       }
-      
+
       return this.isAuthenticated;
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -174,10 +187,12 @@ class AuthManager {
    * @param {string} permission - Permission to check (e.g., 'use:premium-features')
    */
   hasPermission(permission) {
-    return this.permissions && 
-           this.permissions.permissions && 
-           Array.isArray(this.permissions.permissions) &&
-           this.permissions.permissions.includes(permission);
+    return (
+      this.permissions &&
+      this.permissions.permissions &&
+      Array.isArray(this.permissions.permissions) &&
+      this.permissions.permissions.includes(permission)
+    );
   }
 
   /**
@@ -213,15 +228,21 @@ class AuthManager {
     }
 
     const tier = this.getSubscriptionTier();
-    
+
     // Define feature access based on subscription tier
     const featureAccess = {
       'playlist': { tiers: ['free', 'premium', 'pro'], permission: null },
       'external-urls': { tiers: ['free', 'premium', 'pro'], permission: null },
       'export-midi': { tiers: ['free', 'premium', 'pro'], permission: null },
-      'export-musicxml': { tiers: ['premium', 'pro'], permission: 'export:musicxml' },
+      'export-musicxml': {
+        tiers: ['premium', 'pro'],
+        permission: 'export:musicxml',
+      },
       'offline-mode': { tiers: ['pro'], permission: 'use:offline-mode' },
-      'advanced-settings': { tiers: ['premium', 'pro'], permission: 'use:advanced-settings' },
+      'advanced-settings': {
+        tiers: ['premium', 'pro'],
+        permission: 'use:advanced-settings',
+      },
     };
 
     const access = featureAccess[feature];
@@ -231,17 +252,17 @@ class AuthManager {
 
     // Check tier
     if (!access.tiers.includes(tier)) {
-      return { 
-        allowed: false, 
-        reason: `This feature requires a ${access.tiers[access.tiers.length - 1]} subscription` 
+      return {
+        allowed: false,
+        reason: `This feature requires a ${access.tiers[access.tiers.length - 1]} subscription`,
       };
     }
 
     // Check permission if specified
     if (access.permission && !this.hasPermission(access.permission)) {
-      return { 
-        allowed: false, 
-        reason: 'You do not have permission to access this feature' 
+      return {
+        allowed: false,
+        reason: 'You do not have permission to access this feature',
       };
     }
 

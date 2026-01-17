@@ -302,6 +302,14 @@ async function createPlayer() {
 
       // Set up auto-advance monitoring for playlists
       setupPlaylistAutoAdvance();
+
+      // Ensure sheet container is visible (important for WebView environments)
+      const container = document.getElementById('sheet-container');
+      if (container) {
+        container.style.display = 'block';
+        container.style.visibility = 'visible';
+        container.style.opacity = '1';
+      }
     } catch (error) {
       console.error('❌ Error creating player:', error);
       console.error('Error message:', error.message);
@@ -1853,6 +1861,34 @@ async function initializeAuth() {
         await authManager.logout();
         updateAuthUI();
       });
+
+    // Listen for auth callback completion to re-initialize the entire app
+    window.addEventListener('auth-callback-complete', async (event) => {
+      console.log(
+        'Auth callback complete event received, re-initializing app...',
+        event.detail,
+      );
+
+      // Update UI first
+      updateAuthUI();
+
+      // Force complete re-initialization after successful login
+      // Wait a bit to ensure DOM is stable
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Re-populate samples and playlists
+      await populateSamplesList();
+      populatePlaylistDropdown();
+
+      // Force re-create the player with default or stored settings
+      const defaultSheet = g_state.params.get('sheet') || DEFAULT_SHEET;
+      console.log('Re-creating player with sheet:', defaultSheet);
+
+      // Trigger a fresh player creation
+      await handleSampleSelect({ target: { value: defaultSheet } });
+
+      console.log('App re-initialization complete');
+    });
   } catch (error) {
     console.error('Auth initialization failed:', error);
   }
