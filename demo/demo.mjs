@@ -33,15 +33,19 @@ const DEFAULT_VELOCITY = 1;
 const DEFAULT_REPEAT = 0;
 const DEFAULT_TRANSPOSE = 0;
 
-// Intercept Verovio font loading errors and downgrade to warnings
+// Suppress Verovio font loading warnings that are expected in web environments
+// These warnings occur because Verovio expects additional font files that aren't
+// needed for basic functionality - the WASM module includes embedded fallback fonts
 const originalError = console.error;
 console.error = function (...args) {
   const message = args.join(' ');
+  // Suppress expected Verovio font warnings
   if (message.includes('SMuFL glyphs') || message.includes('Leipzig font')) {
-    console.warn(...args);
-  } else {
-    originalError.apply(console, args);
+    // These warnings are expected when running in a browser environment
+    // Verovio's embedded fonts provide sufficient coverage for most use cases
+    return; // Silently ignore
   }
+  originalError.apply(console, args);
 };
 
 // List of CORS proxies to try in order
