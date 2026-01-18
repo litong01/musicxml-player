@@ -48,21 +48,27 @@
         font-size: 1.5em;
       }
       #settings-btn {
-        font-size: 1.2em;
-        padding: 8px 12px;
-        height: 40px;
-        width: 40px;
+        font-size: 1em;
+        padding: 6px 10px;
+        height: 32px;
+        min-width: 32px;
         cursor: pointer;
-        background-color: #b8860b;
+        background-color: #007aff;
         color: white;
         border: none;
-        border-radius: 5px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s ease;
       }
       #settings-btn:hover {
-        background-color: #8b6914;
+        background-color: #0051d5;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      }
+      #settings-btn:active {
+        transform: scale(0.95);
       }
       #auth-container {
         display: flex;
@@ -302,25 +308,31 @@
       }
       #player {
         display: flex;
-        gap: 5px;
+        gap: 8px;
         align-items: center;
       }
       .player {
-        font-size: 1.2em;
-        padding: 8px 12px;
-        height: 40px;
-        width: 40px;
+        font-size: 1em;
+        padding: 6px 10px;
+        height: 32px;
+        min-width: 32px;
         cursor: pointer;
-        background-color: #b8860b;
+        background-color: #007aff;
         color: white;
         border: none;
-        border-radius: 5px;
+        border-radius: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s ease;
       }
       .player:hover {
-        background-color: #8b6914;
+        background-color: #0051d5;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      }
+      .player:active {
+        transform: scale(0.95);
       }
       #error {
         background-color: brown;
@@ -415,7 +427,7 @@
           id="prev"
           title="Previous song"
           style="display: none">
-          ◀◀
+          |&lt;
         </button>
         <button class="player" id="rewind">&lt;&lt;</button>
         <button class="player" id="play-pause">▶︎</button>
@@ -424,7 +436,7 @@
           id="next"
           title="Next song"
           style="display: none">
-          ▶▶
+          &gt;&gt;
         </button>
       </div>
       <div
@@ -843,7 +855,7 @@
                 type="button"
                 id="transpose-decrease"
                 class="number-control-btn">
-                −
+                -
               </button>
               <input
                 type="number"
@@ -885,7 +897,7 @@
                 type="button"
                 id="velocity-decrease"
                 class="number-control-btn">
-                −
+                -
               </button>
               <input
                 type="number"
@@ -989,7 +1001,7 @@
               border: none;
               padding: 5px 10px;
             ">
-            ✕
+            X
           </button>
         </div>
 
