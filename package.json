@@ -37,24 +37,30 @@
     "build:d.ts": "tsc --emitDeclarationOnly --outDir build/types",
     "build:snap": "vitest --update",
     "test:type": "tsc --noEmit",
-    "demo:develop": "ws -d demo --rewrite '/mma/(.*) -> http://localhost:3000/$1' -p ${PORT:-8080}",
-    "demo:server": "node demo/inject-version.mjs && node demo/generate-files-list.mjs && cd demo && ws -p ${PORT:-8082} -z -c lws.config.mjs",
-    "link": "run() { rm -rf node_modules/$1 && ln -s $(readlink -f $(npm root -g)/$1) node_modules/$1; }; run"
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android",
+    "cap:build": "node demo/inject-version.mjs && node demo/generate-files-list.mjs && npx cap sync"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/infojunkie/musicxml-player.git"
   },
   "author": "Karim Ratib <karim.ratib@gmail.com> (https://github.com/infojunkie)",
-  "license": "GPL-3.0-only",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/infojunkie/musicxml-player/issues"
   },
   "homepage": "https://github.com/infojunkie/musicxml-player#readme",
   "dependencies": {
+    "@capacitor/android": "^8.0.1",
+    "@capacitor/browser": "^8.0.0",
+    "@capacitor/cli": "^8.0.1",
+    "@capacitor/core": "^8.0.1",
+    "@capacitor/ios": "^8.0.1",
+    "@capacitor/preferences": "^8.0.0",
     "@tonejs/midi": "^2.0.28",
     "fast-xml-parser": "^4.5.0",
-    "local-web-server": "^5.3.0",
     "opensheetmusicdisplay": "^1.7.1",
     "spessasynth_core": "^4.0.0",
     "spessasynth_lib": "^4.0.0",

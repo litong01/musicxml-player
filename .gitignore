@@ -42,3 +42,13 @@ pnpmfile.js
 
 # Editor-specific files
 .projections.json
+
+# Capacitor
+ios/App/Pods
+ios/App/public
+ios/App/App/public
+android/app/src/main/assets/public
+android/.gradle
+android/.idea
+android/app/build
+*.keystore

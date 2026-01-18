@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -45,17 +45,23 @@ function getBuildVersion() {
 const BUILD_VERSION = getBuildVersion();
 const SERVICE_WORKER_PATH = join(__dirname, 'service-worker.js');
 
-console.log(`Injecting version: ${BUILD_VERSION} into service worker...`);
+// Service worker is not needed for Capacitor native apps
+// Skip version injection if the file doesn't exist
+if (existsSync(SERVICE_WORKER_PATH)) {
+  console.log(`Injecting version: ${BUILD_VERSION} into service worker...`);
 
-let content = readFileSync(SERVICE_WORKER_PATH, 'utf8');
+  let content = readFileSync(SERVICE_WORKER_PATH, 'utf8');
 
-// Replace the CACHE_NAME constant
-content = content.replace(
-  /const CACHE_NAME = 'musicxml-player-v[^']+';/,
-  `const CACHE_NAME = 'musicxml-player-v${BUILD_VERSION}';`,
-);
+  // Replace the CACHE_NAME constant
+  content = content.replace(
+    /const CACHE_NAME = 'musicxml-player-v[^']+';/,
+    `const CACHE_NAME = 'musicxml-player-v${BUILD_VERSION}';`,
+  );
 
-writeFileSync(SERVICE_WORKER_PATH, content, 'utf8');
+  writeFileSync(SERVICE_WORKER_PATH, content, 'utf8');
+} else {
+  console.log('Service worker not found (skipped for native app build)');
+}
 
 console.log(
   `✅ Service worker version updated to: musicxml-player-v${BUILD_VERSION}`,

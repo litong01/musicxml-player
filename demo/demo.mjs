@@ -24,6 +24,8 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/@music-i18n/ireal-musicxml@latest/+esm';
 import { authManager } from './auth.mjs';
 
+console.log('demo.mjs: Top-level code executing');
+
 const DEFAULT_RENDERER = 'osmd';
 const DEFAULT_OUTPUT = 'local';
 const DEFAULT_SHEET = 'data/asa-branca.musicxml';
@@ -793,6 +795,8 @@ function handlePlayPauseKey(e) {
 }
 
 async function handleSampleSelect(e) {
+  console.log('handleSampleSelect called with value:', e.target.value);
+  
   // When called from settings modal, just store the selection
   if (g_state.pendingSettings) {
     g_state.pendingSettings.musicSource = 'samples';
@@ -800,7 +804,10 @@ async function handleSampleSelect(e) {
     return;
   }
   // Otherwise, apply immediately (for initial load)
-  if (!e.target.value) return;
+  if (!e.target.value) {
+    console.log('No target value, returning');
+    return;
+  }
 
   // Clear playlist state when manually selecting a sample
   clearPlaylistState();
@@ -809,8 +816,11 @@ async function handleSampleSelect(e) {
   g_state.currentMusicSource = 'samples';
 
   let sheet = e.target.value;
+  console.log('Loading sheet:', sheet);
+  
   let option = document.querySelector(`#samples option[value="${sheet}"]`);
   if (!option) {
+    console.log('Option not found, using default:', DEFAULT_SHEET);
     sheet = DEFAULT_SHEET;
     option = document.querySelector(`#samples option[value="${sheet}"]`);
   }
@@ -818,14 +828,24 @@ async function handleSampleSelect(e) {
   // If still no option (e.g., non-authenticated user with empty samples list),
   // just load the sheet directly without trying to read data attributes
   if (!option) {
+    console.log('Still no option, loading directly');
     g_state.params.set('sheet', sheet);
     g_state.params.set('renderer', DEFAULT_RENDERER);
     g_state.params.set('converter', DEFAULT_CONVERTER);
 
     // Load directly
-    const buffer = await (await fetish(sheet)).arrayBuffer();
-    const filename = sheet.split('/').pop();
-    await handleFileBuffer(filename, buffer);
+    try {
+      console.log('Fetching:', sheet);
+      const response = await fetish(sheet);
+      console.log('Fetch response:', response.status, response.statusText);
+      const buffer = await response.arrayBuffer();
+      console.log('Buffer loaded, size:', buffer.byteLength);
+      const filename = sheet.split('/').pop();
+      await handleFileBuffer(filename, buffer);
+    } catch (error) {
+      console.error('Error loading file:', error);
+      alert('Failed to load file: ' + sheet + '\nError: ' + error.message);
+    }
     return;
   }
 
@@ -835,8 +855,12 @@ async function handleSampleSelect(e) {
   try {
     // Renderer and converter are determined by settings and auto-detection, not per-file
     if (sheet.endsWith('.musicxml') || sheet.endsWith('.mxl')) {
+      console.log('Loading MusicXML file:', sheet);
       // Fetch the MusicXML file
-      const buffer = await (await fetish(sheet)).arrayBuffer();
+      const response = await fetish(sheet);
+      console.log('Fetch response:', response.status, response.statusText);
+      const buffer = await response.arrayBuffer();
+      console.log('Buffer loaded, size:', buffer.byteLength);
 
       // Extract filename from path
       const filename = sheet.split('/').pop();
@@ -844,6 +868,7 @@ async function handleSampleSelect(e) {
       // Use handleFileBuffer which will parse, convert unpitched percussion, and ensure MIDI exists
       await handleFileBuffer(filename, buffer);
     } else {
+      console.log('Loading iReal file:', sheet);
       // For iReal Pro files, just load the first song
       const ireal = await (await fetish(sheet)).text();
       const playlist = new Playlist(ireal);
@@ -863,7 +888,8 @@ async function handleSampleSelect(e) {
       }
     }
   } catch (error) {
-    console.error(error);
+    console.error('Error in handleSampleSelect:', error);
+    alert('Failed to load music file: ' + error.message);
   }
 }
 
@@ -1846,6 +1872,12 @@ function savePlaylist() {
  * Initialize authentication system
  */
 async function initializeAuth() {
+  // Skip auth entirely if disabled
+  if (!authManager.authEnabled) {
+    console.log('Authentication is disabled, skipping auth setup');
+    return;
+  }
+
   try {
     await authManager.initialize();
     updateAuthUI();
@@ -1981,8 +2013,14 @@ function checkFeatureAccess(feature) {
 
 // ========== Main Application ==========
 
-document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize authentication
+console.log('demo.mjs: About to add DOMContentLoaded listener');
+console.log('demo.mjs: document.readyState =', document.readyState);
+
+// Function containing all initialization code
+async function initializeApp() {
+  console.log('initializeApp: Starting initialization');
+  
+  // Initialize authentication (skips if disabled)
   await initializeAuth();
 
   // Check if user is authenticated (when auth is enabled)
@@ -2343,8 +2381,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     addUrlInput();
   });
 
-  // Register service worker for PWA support
-  if ('serviceWorker' in navigator) {
+  // Service worker is not needed for Capacitor native apps
+  // Skip registration in native environment
+  if ('serviceWorker' in navigator && !window.Capacitor) {
     navigator.serviceWorker
       .register('/service-worker.js')
       .then((registration) => {
@@ -2359,7 +2398,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Start the app.
-  await handleSampleSelect({
-    target: { value: g_state.params.get('sheet') ?? DEFAULT_SHEET },
-  });
-});
+  console.log('Starting app with default sheet:', g_state.params.get('sheet') ?? DEFAULT_SHEET);
+  try {
+    await handleSampleSelect({
+      target: { value: g_state.params.get('sheet') ?? DEFAULT_SHEET },
+    });
+    console.log('App started successfully');
+  } catch (error) {
+    console.error('Failed to start app:', error);
+    alert('Failed to load music: ' + error.message);
+  }
+}
+
+// Run initialization when DOM is ready or immediately if already ready
+if (document.readyState === 'loading') {
+  console.log('demo.mjs: DOM still loading, waiting for DOMContentLoaded');
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+  console.log('demo.mjs: DOM already ready, running immediately');
+  initializeApp();
+}
