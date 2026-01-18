@@ -50,7 +50,7 @@ console.error = function (...args) {
   originalError.apply(console, args);
 };
 
-// List of CORS proxies to try in order
+// List of CORS proxies to try in order (only used for web, not native apps)
 const CORS_PROXIES = [
   '/proxy?url=', // Our own backend proxy (most reliable)
   'https://corsproxy.io/?',
@@ -58,33 +58,181 @@ const CORS_PROXIES = [
 ];
 
 /**
- * Fetch a file from an external URL using the backend proxy.
- * The proxy handles URL conversion (Google Drive, Dropbox, etc.) and domain validation.
+ * Convert Google Drive share URLs to direct download URLs
+ * Uses the format that bypasses virus scan warnings for larger files
+ */
+function convertGoogleDriveUrl(url) {
+  const match = url.match(/drive\.google\.com\/file\/d\/([^\/]+)/);
+  if (match) {
+    const fileId = match[1];
+    // Use confirm=t to bypass the "Google can't scan this file for viruses" warning
+    // This format works more reliably for files of all sizes
+    return `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`;
+  }
+  return url;
+}
+
+/**
+ * Convert Dropbox share URLs to direct download URLs
+ */
+function convertDropboxUrl(url) {
+  // Change dl=0 to dl=1 for direct download
+  if (url.includes('dropbox.com') && url.includes('dl=0')) {
+    return url.replace('dl=0', 'dl=1');
+  }
+  // If no dl parameter, add dl=1
+  if (url.includes('dropbox.com') && !url.includes('dl=')) {
+    const separator = url.includes('?') ? '&' : '?';
+    return url + separator + 'dl=1';
+  }
+  return url;
+}
+
+/**
+ * Convert OneDrive share URLs to direct download URLs
+ */
+function convertOneDriveUrl(url) {
+  // OneDrive/1drv.ms links - add download=1 parameter
+  if (url.includes('onedrive.live.com') || url.includes('1drv.ms')) {
+    const separator = url.includes('?') ? '&' : '?';
+    return url + separator + 'download=1';
+  }
+  return url;
+}
+
+/**
+ * Convert all supported cloud storage URLs to direct download format
+ */
+function convertToDirectDownload(url) {
+  let convertedUrl = url;
+  convertedUrl = convertGoogleDriveUrl(convertedUrl);
+  convertedUrl = convertDropboxUrl(convertedUrl);
+  convertedUrl = convertOneDriveUrl(convertedUrl);
+  return convertedUrl;
+}
+
+/**
+ * Fetch a file from an external URL.
+ * In native apps (Capacitor), use CapacitorHttp for better native networking.
+ * In web apps, use proxy to handle CORS.
  */
 async function fetchExternalUrl(url) {
-  // All external URLs go through the proxy to ensure proper handling
-  // The server will:
-  // 1. Validate the domain is allowed
-  // 2. Convert cloud storage URLs (Google Drive, Dropbox, OneDrive)
-  // 3. Fetch the file without CORS restrictions
-  // 4. Return the actual file content
+  // Check if running in a native app (Capacitor)
+  const isNativeApp = window.Capacitor !== undefined;
 
-  // Try each proxy in order (our own backend proxy first)
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const proxyUrl = proxy + encodeURIComponent(url);
-      const response = await fetish(proxyUrl);
-      if (response.ok) {
-        return await response.arrayBuffer();
-      }
-    } catch (error) {
-      // This proxy failed, try the next one
-      continue;
+  if (isNativeApp) {
+    // Native apps: use CapacitorHttp from @capacitor/core for native networking
+    const { CapacitorHttp } = window.Capacitor.Plugins;
+    const directUrl = convertToDirectDownload(url);
+    console.log(`[Native App] Original URL: ${url}`);
+    if (directUrl !== url) {
+      console.log(`[Native App] Converted to direct download: ${directUrl}`);
     }
-  }
+    console.log(`[Native App] Fetching with CapacitorHttp: ${directUrl}`);
+    
+    try {
+      console.log('[Native App] Starting file fetch with native HTTP...');
+      
+      const options = {
+        url: directUrl,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+          'Accept': '*/*',
+        },
+        responseType: 'arraybuffer',
+        readTimeout: 30000,
+        connectTimeout: 30000,
+      };
+      
+      const response = await CapacitorHttp.get(options);
+      
+      console.log(`[Native App] Response received - status: ${response.status}`);
+      console.log(`[Native App] Response URL: ${response.url}`);
+      console.log(`[Native App] Response headers:`, response.headers);
+      
+      if (response.status >= 200 && response.status < 300) {
+        const contentType = response.headers['content-type'] || response.headers['Content-Type'];
+        console.log(`[Native App] Content-Type: ${contentType}`);
+        
+        // Check if we got an HTML page instead of a file
+        if (contentType && contentType.includes('text/html')) {
+          console.warn('[Native App] Received HTML instead of file');
+          const htmlText = typeof response.data === 'string' ? response.data : new TextDecoder().decode(response.data);
+          console.log(`[Native App] HTML response (first 500 chars): ${htmlText.substring(0, 500)}`);
+          throw new Error('Received HTML page instead of file. Google Drive may require authentication or the file may not be publicly accessible. Try using "Anyone with the link" sharing setting.');
+        }
+        
+        // CapacitorHttp returns base64 encoded string when responseType is 'arraybuffer'
+        // We need to decode it to ArrayBuffer
+        let buffer;
+        if (typeof response.data === 'string') {
+          // Decode base64 to ArrayBuffer
+          console.log(`[Native App] Decoding base64 data (${response.data.length} chars)`);
+          const binaryString = atob(response.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          buffer = bytes.buffer;
+        } else {
+          buffer = response.data;
+        }
+        
+        console.log(`[Native App] Successfully fetched ${buffer.byteLength} bytes`);
+        return buffer;
+      }
+      
+      const errorText = typeof response.data === 'string' ? response.data : new TextDecoder().decode(response.data);
+      console.error(`[Native App] Error response (first 500 chars): ${errorText.substring(0, 500)}`);
+      throw new Error(`HTTP ${response.status}`);
+      
+    } catch (error) {
+      console.error(`[Native App] CapacitorHttp error:`, error);
+      console.error(`[Native App] Error name:`, error.name);
+      console.error(`[Native App] Error message:`, error.message);
+      
+      if (error.stack) {
+        console.error(`[Native App] Error stack:`, error.stack);
+      }
+      
+      if (error.name === 'Timeout' || error.message?.includes('timeout')) {
+        throw new Error('Request timed out after 30 seconds');
+      }
+      
+      // Provide helpful error message
+      if (error.message === 'Load failed') {
+        throw new Error('Network request blocked. Please delete the app from the simulator (long press → Delete App) and rebuild to apply security settings.');
+      }
+      
+      throw new Error(`Unable to fetch from ${url}: ${error.message || 'Network error'}`);
+    }
+  } else {
+    // Web apps need proxy to handle CORS restrictions
+    // The server will:
+    // 1. Validate the domain is allowed
+    // 2. Convert cloud storage URLs (Google Drive, Dropbox, OneDrive)
+    // 3. Fetch the file without CORS restrictions
+    // 4. Return the actual file content
 
-  // All proxies failed
-  throw new Error(`Unable to fetch ${url}. All CORS proxies failed.`);
+    console.log(`[Web App] Fetching via proxy: ${url}`);
+    // Try each proxy in order (our own backend proxy first)
+    for (const proxy of CORS_PROXIES) {
+      try {
+        const proxyUrl = proxy + encodeURIComponent(url);
+        const response = await fetish(proxyUrl);
+        if (response.ok) {
+          return await response.arrayBuffer();
+        }
+      } catch (error) {
+        // This proxy failed, try the next one
+        continue;
+      }
+    }
+
+    // All proxies failed
+    throw new Error(`Unable to fetch ${url}. All CORS proxies failed.`);
+  }
 }
 const DEFAULT_OPTIONS = {
   unroll: false,
@@ -275,7 +423,7 @@ async function createPlayer() {
         velocity: Number(velocity),
         horizontal: options.horizontal,
         followCursor: options.follow,
-        soundfontUri: 'data/GeneralUserGS.sf3',
+        soundfontUri: window.Capacitor ? './data/GeneralUserGS.sf3' : 'data/GeneralUserGS.sf3',
         //timemapXslUri: 'data/timemap.sef.json',
       });
 
