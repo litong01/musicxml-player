@@ -1104,57 +1104,5 @@
     </div>
 
     <div id="sheet-container"></div>
-    
-    <!-- Visible error console for debugging -->
-    <div id="debug-console" style="position: fixed; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; max-height: 200px; overflow-y: auto; z-index: 9999; display: none;">
-      <div id="debug-logs"></div>
-    </div>
-    
-    <!-- Debug info for troubleshooting -->
-    <script>
-      // Show debug console
-      const debugConsole = document.getElementById('debug-console');
-      const debugLogs = document.getElementById('debug-logs');
-      debugConsole.style.display = 'block';
-      
-      function addDebugLog(message, type = 'log') {
-        const color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : '#0f0';
-        const timestamp = new Date().toTimeString().split(' ')[0];
-        debugLogs.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
-        debugLogs.scrollTop = debugLogs.scrollHeight;
-      }
-      
-      // Override console methods to show in UI
-      const originalLog = console.log;
-      const originalError = console.error;
-      const originalWarn = console.warn;
-      
-      console.log = function(...args) {
-        originalLog.apply(console, args);
-        addDebugLog(args.join(' '), 'log');
-      };
-      
-      console.error = function(...args) {
-        originalError.apply(console, args);
-        addDebugLog('ERROR: ' + args.join(' '), 'error');
-      };
-      
-      console.warn = function(...args) {
-        originalWarn.apply(console, args);
-        addDebugLog('WARN: ' + args.join(' '), 'warn');
-      };
-      
-      window.addEventListener('error', function(e) {
-        addDebugLog('ERROR: ' + e.message + ' at ' + e.filename + ':' + e.lineno, 'error');
-      });
-      
-      window.addEventListener('unhandledrejection', function(e) {
-        addDebugLog('PROMISE ERROR: ' + e.reason, 'error');
-      });
-      
-      addDebugLog('Debug console initialized');
-      addDebugLog('Capacitor detected: ' + !!window.Capacitor);
-      addDebugLog('Platform: ' + (window.Capacitor?.getPlatform() || 'web'));
-    </script>
   </body>
 </html>

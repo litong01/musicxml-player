@@ -24,7 +24,6 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/@music-i18n/ireal-musicxml@latest/+esm';
 import { authManager } from './auth.mjs';
 
-console.log('demo.mjs: Top-level code executing');
 
 const DEFAULT_RENDERER = 'osmd';
 const DEFAULT_OUTPUT = 'local';
@@ -120,14 +119,10 @@ async function fetchExternalUrl(url) {
   // Native app: use CapacitorHttp from @capacitor/core for native networking
   const { CapacitorHttp } = window.Capacitor.Plugins;
   const directUrl = convertToDirectDownload(url);
-  console.log(`[Native App] Original URL: ${url}`);
   if (directUrl !== url) {
-    console.log(`[Native App] Converted to direct download: ${directUrl}`);
   }
-  console.log(`[Native App] Fetching with CapacitorHttp: ${directUrl}`);
   
   try {
-    console.log('[Native App] Starting file fetch with native HTTP...');
     
     const options = {
       url: directUrl,
@@ -143,19 +138,14 @@ async function fetchExternalUrl(url) {
     
     const response = await CapacitorHttp.get(options);
     
-    console.log(`[Native App] Response received - status: ${response.status}`);
-      console.log(`[Native App] Response URL: ${response.url}`);
-      console.log(`[Native App] Response headers:`, response.headers);
       
       if (response.status >= 200 && response.status < 300) {
         const contentType = response.headers['content-type'] || response.headers['Content-Type'];
-        console.log(`[Native App] Content-Type: ${contentType}`);
         
         // Check if we got an HTML page instead of a file
         if (contentType && contentType.includes('text/html')) {
           console.warn('[Native App] Received HTML instead of file');
           const htmlText = typeof response.data === 'string' ? response.data : new TextDecoder().decode(response.data);
-          console.log(`[Native App] HTML response (first 500 chars): ${htmlText.substring(0, 500)}`);
           throw new Error('Received HTML page instead of file. Google Drive may require authentication or the file may not be publicly accessible. Try using "Anyone with the link" sharing setting.');
         }
         
@@ -164,7 +154,6 @@ async function fetchExternalUrl(url) {
         let buffer;
         if (typeof response.data === 'string') {
           // Decode base64 to ArrayBuffer
-          console.log(`[Native App] Decoding base64 data (${response.data.length} chars)`);
           const binaryString = atob(response.data);
           const bytes = new Uint8Array(binaryString.length);
           for (let i = 0; i < binaryString.length; i++) {
@@ -175,7 +164,6 @@ async function fetchExternalUrl(url) {
           buffer = response.data;
         }
         
-        console.log(`[Native App] Successfully fetched ${buffer.byteLength} bytes`);
         return buffer;
       }
       
@@ -317,9 +305,6 @@ async function createPlayer() {
     } catch {
       input.disabled = true;
       if (renderer === k) {
-        console.log(
-          `[createPlayer] Renderer ${k} is disabled, resetting to ${DEFAULT_RENDERER}`,
-        );
         renderer = DEFAULT_RENDERER;
       }
     }
@@ -332,8 +317,6 @@ async function createPlayer() {
   // Create new player.
   if (g_state.musicXml) {
     try {
-      console.log(`[createPlayer] Creating converter: ${converter}`);
-      console.log(`[createPlayer] Track settings:`, g_state.tracks);
       
       const converterInstance = await createConverter(
         converter,
@@ -343,7 +326,6 @@ async function createPlayer() {
         options,
       );
 
-      console.log(`[createPlayer] Converter created, creating player...`);
       const player = await Player.create({
         musicXml: g_state.musicXml,
         container: 'sheet-container',
@@ -360,8 +342,6 @@ async function createPlayer() {
         //timemapXslUri: 'data/timemap.sef.json',
       });
 
-      console.log(`[createPlayer] Player created successfully`);
-      console.log(`[createPlayer] MIDI length: ${player.midi?.byteLength || 'undefined'} bytes`);
 
       // Update the UI elements.
 
@@ -491,7 +471,6 @@ function handleTrackChange(e) {
   // Settings are applied when modal closes, not immediately
   if (!g_state.pendingSettings) return;
   const trackName = e.target.id.replace('track-', ''); // e.g., 'track-solo' -> 'solo'
-  console.log('[handleTrackChange]', trackName, 'changed to:', e.target.checked);
   g_state.pendingSettings.tracks[trackName] = e.target.checked;
 }
 
@@ -627,7 +606,6 @@ async function handleApplySettings() {
 
   // Apply track selection
   if (tracksChanged) {
-    console.log('[applySettings] Tracks changed from:', g_state.tracks, 'to:', settings.tracks);
     g_state.tracks = { ...settings.tracks };
     savePlayerOptions();
   }
@@ -848,7 +826,6 @@ function handlePlayPauseKey(e) {
 }
 
 async function handleSampleSelect(e) {
-  console.log('handleSampleSelect called with value:', e.target.value);
   
   // When called from settings modal, just store the selection
   if (g_state.pendingSettings) {
@@ -858,7 +835,6 @@ async function handleSampleSelect(e) {
   }
   // Otherwise, apply immediately (for initial load)
   if (!e.target.value) {
-    console.log('No target value, returning');
     return;
   }
 
@@ -869,11 +845,9 @@ async function handleSampleSelect(e) {
   g_state.currentMusicSource = 'samples';
 
   let sheet = e.target.value;
-  console.log('Loading sheet:', sheet);
   
   let option = document.querySelector(`#samples option[value="${sheet}"]`);
   if (!option) {
-    console.log('Option not found, using default:', DEFAULT_SHEET);
     sheet = DEFAULT_SHEET;
     option = document.querySelector(`#samples option[value="${sheet}"]`);
   }
@@ -881,18 +855,14 @@ async function handleSampleSelect(e) {
   // If still no option (e.g., non-authenticated user with empty samples list),
   // just load the sheet directly without trying to read data attributes
   if (!option) {
-    console.log('Still no option, loading directly');
     g_state.params.set('sheet', sheet);
     g_state.params.set('renderer', DEFAULT_RENDERER);
     g_state.params.set('converter', DEFAULT_CONVERTER);
 
     // Load directly
     try {
-      console.log('Fetching:', sheet);
       const response = await fetish(sheet);
-      console.log('Fetch response:', response.status, response.statusText);
       const buffer = await response.arrayBuffer();
-      console.log('Buffer loaded, size:', buffer.byteLength);
       const filename = sheet.split('/').pop();
       await handleFileBuffer(filename, buffer);
     } catch (error) {
@@ -908,12 +878,9 @@ async function handleSampleSelect(e) {
   try {
     // Renderer and converter are determined by settings and auto-detection, not per-file
     if (sheet.endsWith('.musicxml') || sheet.endsWith('.mxl')) {
-      console.log('Loading MusicXML file:', sheet);
       // Fetch the MusicXML file
       const response = await fetish(sheet);
-      console.log('Fetch response:', response.status, response.statusText);
       const buffer = await response.arrayBuffer();
-      console.log('Buffer loaded, size:', buffer.byteLength);
 
       // Extract filename from path
       const filename = sheet.split('/').pop();
@@ -921,7 +888,6 @@ async function handleSampleSelect(e) {
       // Use handleFileBuffer which will parse, convert unpitched percussion, and ensure MIDI exists
       await handleFileBuffer(filename, buffer);
     } else {
-      console.log('Loading iReal file:', sheet);
       // For iReal Pro files, just load the first song
       const ireal = await (await fetish(sheet)).text();
       const playlist = new Playlist(ireal);
@@ -1365,7 +1331,6 @@ async function populateSamplesList() {
     const response = await fetish('data/files.json');
     const musicFiles = await response.json();
 
-    console.log(`Loading ${musicFiles.length} MusicXML files from files.json`);
 
     // Add each file to the dropdown
     for (const file of musicFiles) {
@@ -1531,7 +1496,6 @@ function setupPlaylistAutoAdvance() {
 
   // Set up monitoring for any player (not just playlist mode)
   if (!g_state.player) {
-    console.log('No player, skipping monitor setup');
     return;
   }
 
@@ -1541,7 +1505,6 @@ function setupPlaylistAutoAdvance() {
   // Monitor playback state
   playbackMonitorInterval = setInterval(() => {
     if (!g_state.player) {
-      console.log('Player gone, stopping monitor');
       clearInterval(playbackMonitorInterval);
       playbackMonitorInterval = null;
       return;
@@ -1590,18 +1553,15 @@ function setupPlaylistAutoAdvance() {
 
       // Auto-advance to next song only if in playlist mode
       if (g_state.currentPlaylist) {
-        console.log('Song finished, auto-advancing to next song');
         if (
           g_state.currentSongIndex <
           g_state.currentPlaylist.urls.length - 1
         ) {
           playNextSong();
         } else {
-          console.log('Reached end of playlist');
           updatePlaylistDisplay();
         }
       } else {
-        console.log('Song finished');
       }
     } else {
       wasPlaying = isPlaying;
@@ -1826,7 +1786,6 @@ function savePlaylist() {
 async function initializeAuth() {
   // Skip auth entirely if disabled
   if (!authManager.authEnabled) {
-    console.log('Authentication is disabled, skipping auth setup');
     return;
   }
 
@@ -1852,11 +1811,6 @@ async function initializeAuth() {
 
     // Listen for auth callback completion to re-initialize the entire app
     window.addEventListener('auth-callback-complete', async (event) => {
-      console.log(
-        'Auth callback complete event received, re-initializing app...',
-        event.detail,
-      );
-
       // Update UI first
       updateAuthUI();
 
@@ -1870,12 +1824,10 @@ async function initializeAuth() {
 
       // Force re-create the player with default or stored settings
       const defaultSheet = g_state.params.get('sheet') || DEFAULT_SHEET;
-      console.log('Re-creating player with sheet:', defaultSheet);
 
       // Trigger a fresh player creation
       await handleSampleSelect({ target: { value: defaultSheet } });
 
-      console.log('App re-initialization complete');
     });
   } catch (error) {
     console.error('Auth initialization failed:', error);
@@ -1965,12 +1917,9 @@ function checkFeatureAccess(feature) {
 
 // ========== Main Application ==========
 
-console.log('demo.mjs: About to add DOMContentLoaded listener');
-console.log('demo.mjs: document.readyState =', document.readyState);
 
 // Function containing all initialization code
 async function initializeApp() {
-  console.log('initializeApp: Starting initialization');
   
   // Initialize authentication (skips if disabled)
   await initializeAuth();
@@ -2157,12 +2106,6 @@ async function initializeApp() {
   const velocityIncrease = document.getElementById('velocity-increase');
 
   const handleTransposeDecrease = (e) => {
-    console.log(
-      'Transpose decrease triggered:',
-      e.type,
-      'Current:',
-      document.getElementById('transpose').value,
-    );
     e.preventDefault();
     const input = document.getElementById('transpose');
     const currentValue = parseFloat(input.value) || 0;
@@ -2170,17 +2113,10 @@ async function initializeApp() {
     const step = parseFloat(input.step) || 1;
     const newValue = Math.max(min, currentValue - step);
     input.value = newValue;
-    console.log('Transpose new value:', newValue);
     input.dispatchEvent(new Event('change', { bubbles: true }));
   };
 
   const handleTransposeIncrease = (e) => {
-    console.log(
-      'Transpose increase triggered:',
-      e.type,
-      'Current:',
-      document.getElementById('transpose').value,
-    );
     e.preventDefault();
     const input = document.getElementById('transpose');
     const currentValue = parseFloat(input.value) || 0;
@@ -2188,7 +2124,6 @@ async function initializeApp() {
     const step = parseFloat(input.step) || 1;
     const newValue = Math.min(max, currentValue + step);
     input.value = newValue;
-    console.log('Transpose new value:', newValue);
     input.dispatchEvent(new Event('change', { bubbles: true }));
   };
 
@@ -2340,23 +2275,16 @@ async function initializeApp() {
     navigator.serviceWorker
       .register('/service-worker.js')
       .then((registration) => {
-        console.log(
-          'Service Worker registered successfully:',
-          registration.scope,
-        );
       })
       .catch((error) => {
-        console.log('Service Worker registration failed:', error);
       });
   }
 
   // Start the app.
-  console.log('Starting app with default sheet:', g_state.params.get('sheet') ?? DEFAULT_SHEET);
   try {
     await handleSampleSelect({
       target: { value: g_state.params.get('sheet') ?? DEFAULT_SHEET },
     });
-    console.log('App started successfully');
   } catch (error) {
     console.error('Failed to start app:', error);
     alert('Failed to load music: ' + error.message);
@@ -2365,9 +2293,7 @@ async function initializeApp() {
 
 // Run initialization when DOM is ready or immediately if already ready
 if (document.readyState === 'loading') {
-  console.log('demo.mjs: DOM still loading, waiting for DOMContentLoaded');
   document.addEventListener('DOMContentLoaded', initializeApp);
 } else {
-  console.log('demo.mjs: DOM already ready, running immediately');
   initializeApp();
 }
