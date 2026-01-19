@@ -11,4 +11,4 @@ export const KINDE_CONFIG = {
   audience: '',
 };
 
-export const AUTH_ENABLED = false; // Set to true when Kinde credentials are configured
+export const AUTH_ENABLED = true; // Set to true when Kinde credentials are configured

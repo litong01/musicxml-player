@@ -1786,108 +1786,128 @@ function savePlaylist() {
 async function initializeAuth() {
   // Skip auth entirely if disabled
   if (!authManager.authEnabled) {
+    console.log('[Auth] Auth is disabled, skipping');
     return;
   }
 
+  console.log('[Auth] Calling authManager.initialize()...');
   try {
     await authManager.initialize();
-    updateAuthUI();
-
-    // Set up event listeners
-    document.getElementById('login-btn').addEventListener('click', () => {
-      authManager.login();
-    });
-
-    document.getElementById('register-btn').addEventListener('click', () => {
-      authManager.register();
-    });
-
-    document
-      .getElementById('logout-btn')
-      .addEventListener('click', async () => {
-        await authManager.logout();
-        updateAuthUI();
-      });
-
-    // Listen for auth callback completion to re-initialize the entire app
-    window.addEventListener('auth-callback-complete', async (event) => {
-      // Update UI first
-      updateAuthUI();
-
-      // Force complete re-initialization after successful login
-      // Wait a bit to ensure DOM is stable
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Re-populate samples and playlists
-      await populateSamplesList();
-      populatePlaylistDropdown();
-
-      // Force re-create the player with default or stored settings
-      const defaultSheet = g_state.params.get('sheet') || DEFAULT_SHEET;
-
-      // Trigger a fresh player creation
-      await handleSampleSelect({ target: { value: defaultSheet } });
-
-    });
+    console.log('[Auth] authManager.initialize() completed successfully');
   } catch (error) {
-    console.error('Auth initialization failed:', error);
+    // This is normal if user is not logged in yet
+    console.log('[Auth] authManager.initialize() threw error:', error);
   }
+
+  console.log('[Auth] Setting up UI and listeners...');
+  try {
+    // Always update UI and set up listeners, even if initialization failed
+    updateAuthUI();
+    console.log('[Auth] UI updated');
+  } catch (error) {
+    console.error('[Auth] Error updating UI:', error);
+  }
+
+  // Listen for successful authentication to reload the app
+  window.addEventListener('auth-callback-complete', () => {
+    console.log('Authentication complete, reloading app...');
+    window.location.reload();
+  });
+
+  // Set up event listeners - with null checks
+  try {
+    const loginBtn = document.getElementById('login-btn');
+    if (loginBtn) {
+      loginBtn.addEventListener('click', () => {
+        authManager.login();
+      });
+    }
+
+    const registerBtn = document.getElementById('register-btn');
+    if (registerBtn) {
+      registerBtn.addEventListener('click', () => {
+        authManager.register();
+      });
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', async () => {
+        await authManager.logout();
+        // Reload the page to show the landing page
+        window.location.reload();
+      });
+    }
+    console.log('[Auth] Event listeners set up');
+  } catch (error) {
+    console.error('[Auth] Error setting up event listeners:', error);
+  }
+  
+  console.log('[Auth] initializeAuth() complete');
 }
 
 /**
  * Update UI based on authentication status
  */
 function updateAuthUI() {
-  const isAuth = authManager.isUserAuthenticated();
-  const user = authManager.getUser();
-  const tier = authManager.getSubscriptionTier();
+  try {
+    const isAuth = authManager.isUserAuthenticated();
+    const user = authManager.getUser();
+    const tier = authManager.getSubscriptionTier();
 
-  // UI elements
-  const loginBtn = document.getElementById('login-btn');
-  const registerBtn = document.getElementById('register-btn');
-  const logoutBtn = document.getElementById('logout-btn');
-  const userInfo = document.getElementById('user-info');
-  const userName = document.getElementById('user-name');
-  const userAvatar = document.getElementById('user-avatar');
-  const subscriptionBadge = document.getElementById('subscription-badge');
-  const settingsBtn = document.getElementById('settings-btn');
+    // UI elements
+    const loginBtn = document.getElementById('login-btn');
+    const registerBtn = document.getElementById('register-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userInfo = document.getElementById('user-info');
+    const userName = document.getElementById('user-name');
+    const userAvatar = document.getElementById('user-avatar');
+    const subscriptionBadge = document.getElementById('subscription-badge');
+    const settingsBtn = document.getElementById('settings-btn');
 
-  // If auth is not enabled, hide all auth UI
-  if (!authManager.authEnabled) {
-    loginBtn.style.display = 'none';
-    registerBtn.style.display = 'none';
-    logoutBtn.style.display = 'none';
-    userInfo.classList.remove('show');
-    return;
-  }
+    // If auth is not enabled, hide all auth UI
+    if (!authManager.authEnabled) {
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (registerBtn) registerBtn.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      if (userInfo) userInfo.classList.remove('show');
+      return;
+    }
 
-  if (isAuth && user) {
-    // Show user info
-    userInfo.classList.add('show');
-    userName.textContent = user.given_name || user.email || 'User';
-    userAvatar.textContent = (
-      user.given_name?.[0] ||
-      user.email?.[0] ||
-      'U'
-    ).toUpperCase();
+    if (isAuth && user) {
+      // Show user info
+      if (userInfo) userInfo.classList.add('show');
+      if (userName) userName.textContent = user.given_name || user.email || 'User';
+      if (userAvatar) {
+        userAvatar.textContent = (
+          user.given_name?.[0] ||
+          user.email?.[0] ||
+          'U'
+        ).toUpperCase();
+      }
 
-    // Update subscription badge
-    subscriptionBadge.className = '';
-    subscriptionBadge.classList.add(tier);
-    subscriptionBadge.textContent = tier;
+      // Update subscription badge
+      if (subscriptionBadge) {
+        subscriptionBadge.className = '';
+        subscriptionBadge.classList.add(tier);
+        subscriptionBadge.textContent = tier;
+      }
 
-    // Show logout button and settings
-    logoutBtn.style.display = 'inline-block';
-    loginBtn.style.display = 'none';
-    registerBtn.style.display = 'none';
-    settingsBtn.style.display = 'flex';
-  } else {
-    // Show login/register buttons, hide settings
-    userInfo.classList.remove('show');
-    loginBtn.style.display = 'inline-block';
-    registerBtn.style.display = 'inline-block';
-    logoutBtn.style.display = 'none';
-    settingsBtn.style.display = 'none';
+      // Show logout button and settings
+      if (logoutBtn) logoutBtn.style.display = 'inline-block';
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (registerBtn) registerBtn.style.display = 'none';
+      if (settingsBtn) settingsBtn.style.display = 'flex';
+    } else {
+      // Show login/register buttons, hide settings
+      if (userInfo) userInfo.classList.remove('show');
+      if (loginBtn) loginBtn.style.display = 'inline-block';
+      if (registerBtn) registerBtn.style.display = 'inline-block';
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      if (settingsBtn) settingsBtn.style.display = 'none';
+    }
+  } catch (error) {
+    console.error('[Auth] Error in updateAuthUI:', error);
   }
 }
 
@@ -1920,13 +1940,40 @@ function checkFeatureAccess(feature) {
 
 // Function containing all initialization code
 async function initializeApp() {
+  console.log('[App] Starting initialization...');
+  
+  // Test if App plugin is available and can receive deep links
+  if (window.Capacitor?.Plugins?.App) {
+    console.log('[App] Testing App plugin deep link capability...');
+    try {
+      const { App } = window.Capacitor.Plugins;
+      await App.addListener('appUrlOpen', (data) => {
+        console.log('[App] GLOBAL Deep link test received:', data.url);
+      });
+      console.log('[App] Global deep link listener registered for testing');
+    } catch (error) {
+      console.error('[App] Failed to register global deep link listener:', error);
+    }
+  } else {
+    console.log('[App] App plugin not available for deep links');
+  }
   
   // Initialize authentication (skips if disabled)
+  console.log('[App] Initializing auth...');
   await initializeAuth();
+  console.log('[App] Auth initialized');
 
   // Check if user is authenticated (when auth is enabled)
-  const isAuthenticated =
-    !authManager.authEnabled || authManager.isUserAuthenticated();
+  let isAuthenticated = false;
+  try {
+    isAuthenticated =
+      !authManager.authEnabled || authManager.isUserAuthenticated();
+    console.log('[App] isAuthenticated:', isAuthenticated);
+  } catch (error) {
+    console.error('[App] Error checking authentication:', error);
+    isAuthenticated = false;
+  }
+  console.log('[App] Setting up parameters and state...');
 
   // Get URL parameters first
   const params = new URLSearchParams(document.location.search);
@@ -1987,15 +2034,21 @@ async function initializeApp() {
     g_state.params.set('renderer', DEFAULT_RENDERER);
   }
   window.g_state = g_state;
+  console.log('[App] State configured');
 
   // Only populate samples and playlists for authenticated users
   if (isAuthenticated) {
+    console.log('[App] Populating samples and playlists...');
     // Populate the samples list dynamically
     await populateSamplesList();
     // Populate the playlist dropdown
     populatePlaylistDropdown();
+    console.log('[App] Samples and playlists populated');
+  } else {
+    console.log('[App] Skipping samples/playlists (not authenticated)');
   }
 
+  console.log('[App] Building UI...');
   // Build the UI.
   const rendererValue = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
   document.querySelectorAll('input[name="renderer"]').forEach((input) => {
@@ -2281,19 +2334,39 @@ async function initializeApp() {
   }
 
   // Start the app.
+  console.log('[App] Loading music...');
   try {
     await handleSampleSelect({
       target: { value: g_state.params.get('sheet') ?? DEFAULT_SHEET },
     });
+    console.log('[App] Music loaded successfully');
   } catch (error) {
-    console.error('Failed to start app:', error);
+    console.error('[App] Failed to start app:', error);
     alert('Failed to load music: ' + error.message);
+  }
+  console.log('[App] Initialization complete');
+  
+  // Now that app is fully initialized, complete any pending authentication
+  // This is done after initialization to avoid network restrictions during app startup
+  if (authManager && window.Capacitor) {
+    console.log('[App] Completing pending authentication...');
+    setTimeout(async () => {
+      try {
+        await authManager.completePendingAuth();
+        console.log('[App] Pending auth check complete');
+      } catch (error) {
+        console.error('[App] Error completing pending auth:', error);
+      }
+    }, 500); // Small delay to ensure all initialization is done
   }
 }
 
 // Run initialization when DOM is ready or immediately if already ready
+console.log('[App] Document ready state:', document.readyState);
 if (document.readyState === 'loading') {
+  console.log('[App] Waiting for DOMContentLoaded...');
   document.addEventListener('DOMContentLoaded', initializeApp);
 } else {
+  console.log('[App] DOM already loaded, starting immediately');
   initializeApp();
 }

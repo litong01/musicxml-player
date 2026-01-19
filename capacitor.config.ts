@@ -16,7 +16,7 @@ const config: CapacitorConfig = {
   },
   plugins: {
     Browser: {
-      presentationStyle: 'popover'
+      presentationStyle: 'fullscreen'
     }
   }
 };
