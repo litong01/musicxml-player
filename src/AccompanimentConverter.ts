@@ -18,6 +18,7 @@ export interface AccompanimentOptions {
   bass?: boolean;
   strings?: boolean;
   drums?: boolean;
+  metronome?: boolean;
   drummerPracticeMode?: boolean;
 }
 
@@ -56,6 +57,7 @@ export class AccompanimentConverter implements IMIDIConverter {
       bass: options.bass ?? true,
       strings: options.strings ?? true,
       drums: options.drums ?? true,
+      metronome: options.metronome ?? false,
       drummerPracticeMode: options.drummerPracticeMode ?? false,
     };
   }
@@ -103,6 +105,15 @@ export class AccompanimentConverter implements IMIDIConverter {
       unrolledXmlDoc,
       initialTempo,
     );
+
+    console.log(
+      `[AccompanimentConverter] Extracted ${notes.length} melody notes`,
+    );
+    console.log(`[AccompanimentConverter] isPercussion: ${isPercussion}`);
+
+    if (notes.length === 0) {
+      throw new Error(`[AccompanimentConverter] No melody notes extracted!`);
+    }
 
     // Map tempo changes from unrolled XML to timemap positions
     const tempo = initialTempo;
@@ -510,15 +521,23 @@ export class AccompanimentConverter implements IMIDIConverter {
       const scorePartwise = xmlDoc['score-partwise'];
       if (!scorePartwise) return { notes, isPercussion };
 
-      // Get part list to check for percussion
+      // Get parts - only use the first part for melody extraction
+      const parts = Array.isArray(scorePartwise.part)
+        ? scorePartwise.part
+        : [scorePartwise.part];
+
+      // Check if the FIRST part (melody) is percussion
+      // We only care if the melody part itself is percussion, not if the file has other percussion parts
       const partList = scorePartwise['part-list'];
       if (partList && partList['score-part']) {
         const scoreParts = Array.isArray(partList['score-part'])
           ? partList['score-part']
           : [partList['score-part']];
 
-        for (const part of scoreParts) {
-          const partName = part['part-name'];
+        // Only check the first score-part (corresponds to first part - the melody)
+        if (scoreParts.length > 0) {
+          const firstScorePart = scoreParts[0];
+          const partName = firstScorePart['part-name'];
           if (
             typeof partName === 'string' &&
             (partName.toLowerCase().includes('drum') ||
@@ -528,11 +547,6 @@ export class AccompanimentConverter implements IMIDIConverter {
           }
         }
       }
-
-      // Get parts - only use the first part for melody extraction
-      const parts = Array.isArray(scorePartwise.part)
-        ? scorePartwise.part
-        : [scorePartwise.part];
 
       // Only process the first part (melody line)
       const part = parts[0];
@@ -1088,11 +1102,30 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     const energy = energyMap[this._options.bandEnergy];
 
-    // Add original melody track (if solo enabled)
-    if (this._options.solo && !isPercussion) {
+    console.log(
+      `[AccompanimentConverter] Creating MIDI with options:`,
+      this._options,
+    );
+    console.log(
+      `[AccompanimentConverter] Melody notes: ${melodyNotes.length}, isPercussion: ${isPercussion}`,
+    );
+
+    // Determine if we should add melody track
+    // Add melody if:
+    // 1. Solo checkbox is explicitly checked, OR
+    // 2. Nothing at all is selected (not even metronome) - default to melody
+    const hasAnyTrackSelected =
+      this._options.piano ||
+      this._options.bass ||
+      this._options.strings ||
+      this._options.drums ||
+      this._options.metronome;
+    const shouldAddMelody = this._options.solo || !hasAnyTrackSelected;
+
+    if (shouldAddMelody) {
       const melodyTrack = midi.addTrack();
       melodyTrack.name = 'Melody';
-      melodyTrack.channel = 0;
+      melodyTrack.channel = isPercussion ? 9 : 0; // Channel 9 for drums, 0 for melodic
 
       for (const note of melodyNotes) {
         melodyTrack.addNote({
@@ -1396,6 +1429,65 @@ export class AccompanimentConverter implements IMIDIConverter {
               time: beatTime + beatDuration * 0.5,
               duration: beatDuration * 0.2,
               velocity: (baseVelocity * 0.45) / 127,
+            });
+          }
+        }
+      }
+    }
+
+    // Add metronome track if enabled
+    if (this._options.metronome) {
+      const metronomeTrack = midi.addTrack();
+      metronomeTrack.name = 'Metronome';
+      metronomeTrack.channel = 9; // Drum channel for metronome clicks
+
+      // Find first note time across all tracks
+      let firstNoteTime = Infinity;
+      for (const track of midi.tracks) {
+        if (track.notes.length > 0) {
+          const trackFirstNote = track.notes[0].time;
+          if (trackFirstNote < firstNoteTime) {
+            firstNoteTime = trackFirstNote;
+          }
+        }
+      }
+      if (!isFinite(firstNoteTime)) {
+        firstNoteTime = 0;
+      }
+
+      // Use timemap for precise measure-based clicks
+      if (this._timemap && this._timemap.length > 0) {
+        for (const entry of this._timemap) {
+          const measureStart = entry.timestamp / 1000; // Convert ms to seconds
+          const measureDuration = entry.duration / 1000;
+
+          // Skip measures before first note
+          if (measureStart + measureDuration < firstNoteTime) {
+            continue;
+          }
+
+          // Get time signature, default to 4/4
+          const timeSignature = entry.timeSignature || [4, 4];
+          const beatsPerMeasure = timeSignature[0];
+          const beatDuration = measureDuration / beatsPerMeasure;
+
+          // Generate clicks for this measure
+          for (let beat = 0; beat < beatsPerMeasure; beat++) {
+            const clickTime = measureStart + beat * beatDuration;
+
+            if (clickTime < firstNoteTime) {
+              continue;
+            }
+
+            const isDownbeat = beat === 0;
+            const midiNote = isDownbeat ? 76 : 77; // High/Low Wood Block
+            const velocity = isDownbeat ? 127 : 120;
+
+            metronomeTrack.addNote({
+              midi: midiNote,
+              time: clickTime,
+              duration: 0.1, // Short click
+              velocity: velocity / 127,
             });
           }
         }

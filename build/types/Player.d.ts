@@ -194,6 +194,6 @@ export declare class Player {
      *
      * @see https://github.com/spessasus/SpessaSynth/discussions/176
      */
-    protected static _adjustMidiDuration(converter: IMIDIConverter, addMetronome?: boolean): BasicMIDI;
+    protected static _adjustMidiDuration(converter: IMIDIConverter): BasicMIDI;
 }
 //# sourceMappingURL=Player.d.ts.map

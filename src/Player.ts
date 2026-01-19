@@ -14,7 +14,6 @@ import {
   MusicXmlParseResult,
   fetish,
   debounce,
-  addMetronomeTrack,
   removeFermatas,
 } from './helpers';
 
@@ -235,10 +234,8 @@ export class Player {
 
     // Create the MIDI player.
     this._state = PlayerState.Stopped;
-    this._midi = Player._adjustMidiDuration(
-      this._options.converter,
-      this._options.metronome,
-    );
+    // Note: metronome is now handled by AccompanimentConverter directly
+    this._midi = Player._adjustMidiDuration(this._options.converter);
     this._duration = this._midi.duration * 1000;
     this._sequencer = new Sequencer(this._synthesizer);
     if (this._options.output) {
@@ -485,21 +482,8 @@ export class Player {
    *
    * @see https://github.com/spessasus/SpessaSynth/discussions/176
    */
-  protected static _adjustMidiDuration(
-    converter: IMIDIConverter,
-    addMetronome: boolean = false,
-  ): BasicMIDI {
-    let midiBuffer = converter.midi;
-
-    // Add metronome track if requested
-    if (addMetronome) {
-      const midi = BasicMIDI.fromArrayBuffer(midiBuffer);
-      const tempo = midi.tempoChanges[0]?.tempo || 120;
-      const duration = midi.duration;
-      const timemap = converter.timemap;
-      midiBuffer = addMetronomeTrack(midiBuffer, tempo, duration, timemap);
-    }
-
+  protected static _adjustMidiDuration(converter: IMIDIConverter): BasicMIDI {
+    const midiBuffer = converter.midi;
     const midi = BasicMIDI.fromArrayBuffer(midiBuffer);
 
     // Skip duration adjustment - let MIDI file define its own duration

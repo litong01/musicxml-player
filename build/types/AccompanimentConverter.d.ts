@@ -9,6 +9,7 @@ export interface AccompanimentOptions {
     bass?: boolean;
     strings?: boolean;
     drums?: boolean;
+    metronome?: boolean;
     drummerPracticeMode?: boolean;
 }
 /**
