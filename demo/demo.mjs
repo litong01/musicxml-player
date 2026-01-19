@@ -117,37 +117,33 @@ function convertToDirectDownload(url) {
  * In web apps, use proxy to handle CORS.
  */
 async function fetchExternalUrl(url) {
-  // Check if running in a native app (Capacitor)
-  const isNativeApp = window.Capacitor !== undefined;
-
-  if (isNativeApp) {
-    // Native apps: use CapacitorHttp from @capacitor/core for native networking
-    const { CapacitorHttp } = window.Capacitor.Plugins;
-    const directUrl = convertToDirectDownload(url);
-    console.log(`[Native App] Original URL: ${url}`);
-    if (directUrl !== url) {
-      console.log(`[Native App] Converted to direct download: ${directUrl}`);
-    }
-    console.log(`[Native App] Fetching with CapacitorHttp: ${directUrl}`);
+  // Native app: use CapacitorHttp from @capacitor/core for native networking
+  const { CapacitorHttp } = window.Capacitor.Plugins;
+  const directUrl = convertToDirectDownload(url);
+  console.log(`[Native App] Original URL: ${url}`);
+  if (directUrl !== url) {
+    console.log(`[Native App] Converted to direct download: ${directUrl}`);
+  }
+  console.log(`[Native App] Fetching with CapacitorHttp: ${directUrl}`);
+  
+  try {
+    console.log('[Native App] Starting file fetch with native HTTP...');
     
-    try {
-      console.log('[Native App] Starting file fetch with native HTTP...');
-      
-      const options = {
-        url: directUrl,
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
-          'Accept': '*/*',
-        },
-        responseType: 'arraybuffer',
-        readTimeout: 30000,
-        connectTimeout: 30000,
-      };
-      
-      const response = await CapacitorHttp.get(options);
-      
-      console.log(`[Native App] Response received - status: ${response.status}`);
+    const options = {
+      url: directUrl,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+        'Accept': '*/*',
+      },
+      responseType: 'arraybuffer',
+      readTimeout: 30000,
+      connectTimeout: 30000,
+    };
+    
+    const response = await CapacitorHttp.get(options);
+    
+    console.log(`[Native App] Response received - status: ${response.status}`);
       console.log(`[Native App] Response URL: ${response.url}`);
       console.log(`[Native App] Response headers:`, response.headers);
       
@@ -207,33 +203,8 @@ async function fetchExternalUrl(url) {
       
       throw new Error(`Unable to fetch from ${url}: ${error.message || 'Network error'}`);
     }
-  } else {
-    // Web apps need proxy to handle CORS restrictions
-    // The server will:
-    // 1. Validate the domain is allowed
-    // 2. Convert cloud storage URLs (Google Drive, Dropbox, OneDrive)
-    // 3. Fetch the file without CORS restrictions
-    // 4. Return the actual file content
-
-    console.log(`[Web App] Fetching via proxy: ${url}`);
-    // Try each proxy in order (our own backend proxy first)
-    for (const proxy of CORS_PROXIES) {
-      try {
-        const proxyUrl = proxy + encodeURIComponent(url);
-        const response = await fetish(proxyUrl);
-        if (response.ok) {
-          return await response.arrayBuffer();
-        }
-      } catch (error) {
-        // This proxy failed, try the next one
-        continue;
-      }
-    }
-
-    // All proxies failed
-    throw new Error(`Unable to fetch ${url}. All CORS proxies failed.`);
-  }
 }
+
 const DEFAULT_OPTIONS = {
   unroll: false,
   horizontal: false,
@@ -290,7 +261,6 @@ async function createPlayer() {
   const output = g_state.params.get('output') ?? DEFAULT_OUTPUT;
   let renderer = g_state.params.get('renderer') ?? DEFAULT_RENDERER;
   const groove = g_state.params.get('groove') ?? DEFAULT_GROOVE;
-  let converter = g_state.params.get('converter') ?? DEFAULT_CONVERTER;
   const velocity = g_state.params.get('velocity') ?? DEFAULT_VELOCITY;
   const repeat = g_state.params.get('repeat') ?? DEFAULT_REPEAT;
   const transpose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
@@ -356,53 +326,8 @@ async function createPlayer() {
   }
   document.getElementById(`renderer-${renderer}`).checked = true;
 
-  // Auto-detect converter: prefer custom MIDI if available when only solo track is enabled,
-  // transpose is 0, and metronome is off - otherwise use AccompanimentConverter
-  let hasMidiFile = false;
-
-  // Check if custom MIDI file exists in data directory (skip for external URLs)
-  const baseName = base
-    .replace(/\.(musicxml|mxl|xml)$/i, '')
-    .replace(/^data\//, '');
-
-  // Determine if we're in "solo only" mode (only melody, no band tracks)
-  const soloOnlyMode =
-    g_state.tracks.solo &&
-    !g_state.tracks.piano &&
-    !g_state.tracks.bass &&
-    !g_state.tracks.strings &&
-    !g_state.tracks.drums;
-
-  // Check if we can use existing MIDI file:
-  // - Must be solo-only mode
-  // - Transpose must be 0 (no transposition)  
-  // - Metronome must be off
-  // - Not in Capacitor (native apps always use AccompanimentConverter)
-  const canUseMidiFile =
-    soloOnlyMode && 
-    Number(transpose) === 0 && 
-    !g_state.tracks.metronome &&
-    !window.Capacitor;
-
-  // Only check for existing MIDI files if we can use them
-  if (baseName !== 'remote-file' && canUseMidiFile) {
-    try {
-      const midiPath = base.replace(/\.\w+$/, '.mid');
-      await fetish(midiPath, { method: 'HEAD' });
-      hasMidiFile = true;
-    } catch {
-      // No .mid file on server - will use AccompanimentConverter
-    }
-  }
-
-  // Choose converter: use cached MIDI only when all conditions are met, otherwise generate with AccompanimentConverter
-  if (hasMidiFile && canUseMidiFile) {
-    // Use existing MIDI file for solo-only mode with no transpose and no metronome
-    converter = 'midi';
-  } else {
-    // Generate MIDI with AccompanimentConverter (handles all track combinations, transpose, and metronome)
-    converter = 'accomp';
-  }
+  // Always use AccompanimentConverter for native apps (handles all track combinations, transpose, and metronome)
+  const converter = 'accomp';
 
   // Create new player.
   if (g_state.musicXml) {
@@ -543,49 +468,17 @@ async function createConverter(converter, sheet, groove, renderer, options) {
     baseName = baseName.replace(/^data\//, '');
   }
 
-  // Note: We no longer use IndexedDB cached MIDI here because it doesn't
-  // account for accompaniment mode changes. AccompanimentConverter will
-  // generate fresh MIDI with the correct mode.
-
-  switch (converter) {
-    case 'midi':
-      const midi = base.replace(/\.\w+$/, '.mid');
-      try {
-        const timemap = base.replace(/\.\w+$/, '.timemap.json');
-        await fetish(timemap, { method: 'HEAD' });
-        return new FetchConverter(midi, timemap);
-      } catch {
-        return new FetchConverter(midi);
-      }
-    case 'vrv':
-      // Use VerovioConverter for all accompaniment modes
-      return new VerovioConverter(g_state.vrvOptions);
-    case 'accomp':
-      // Use AccompanimentConverter to generate band accompaniment
-      return new AccompanimentConverter({
-        bandEnergy: 'medium',
-        solo: g_state.tracks.solo,
-        piano: g_state.tracks.piano,
-        bass: g_state.tracks.bass,
-        strings: g_state.tracks.strings,
-        drums: g_state.tracks.drums,
-        metronome: g_state.tracks.metronome,
-        drummerPracticeMode: true,
-      });
-    case 'mma':
-      const parameters = {};
-      if (groove !== DEFAULT_GROOVE) {
-        parameters['globalGroove'] = groove;
-      }
-      return new MmaConverter(window.location.href + 'mma/', parameters);
-    case 'mscore':
-      return new MuseScoreConverter(base.replace(/\.\w+$/, '.mscore.json'));
-    case 'vrvs':
-      return new VerovioStaticConverter(
-        base.replace(/\.\w+$/, '.mid'),
-        base.replace(/\.\w+$/, '.vrv.json'),
-      );
-  }
+  // Use AccompanimentConverter to generate band accompaniment with selected tracks
+  return new AccompanimentConverter({
+    bandEnergy: 'medium',
+    solo: g_state.tracks.solo,
+    piano: g_state.tracks.piano,
+    bass: g_state.tracks.bass,
+    strings: g_state.tracks.strings,
+    drums: g_state.tracks.drums,
+    metronome: g_state.tracks.metronome,
+    drummerPracticeMode: true,
+  });
 }
 
 function handleRendererChange(e) {
@@ -1131,10 +1024,9 @@ async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
 
     const baseName = filename.replace(/\.(musicxml|mxl|xml)$/i, '');
 
-    // Only delete cache and generate MIDI if user didn't provide MIDI file
+    // Only delete cache if user didn't provide MIDI file
     if (!skipCacheDelete) {
       await deleteMidiFile(baseName);
-      await ensureMidiFile(filename, g_state.musicXml);
     }
 
     // For URL-loaded files, try using MuseScore converter which works better with OSMD renderer
@@ -1152,105 +1044,6 @@ async function handleFileBuffer(filename, buffer, skipCacheDelete = false) {
       document.getElementById('error').textContent =
         'This file is not recognized as either MusicXML or iReal Pro.';
     }
-  }
-}
-
-/**
- * Ensure MIDI file exists for the given MusicXML file.
- * First tries to load from data directory (only if conditions allow),
- * then generates using Verovio if not found.
- * @param {string} filename - Original MusicXML filename
- * @param {string} musicXml - MusicXML content
- */
-async function ensureMidiFile(filename, musicXml) {
-  const baseName = filename.replace(/\.(musicxml|mxl|xml)$/i, '');
-
-  // Determine if we're in "solo only" mode
-  const soloOnlyMode =
-    g_state.tracks.solo &&
-    !g_state.tracks.piano &&
-    !g_state.tracks.bass &&
-    !g_state.tracks.strings &&
-    !g_state.tracks.drums;
-
-  // Get current transpose setting
-  const transpose = g_state.params.get('transpose') ?? DEFAULT_TRANSPOSE;
-
-  // Get current metronome setting
-  const metronome = g_state.options.metronome ?? false;
-
-  // Check if we can use existing MIDI file:
-  // - Must be solo-only mode
-  // - Transpose must be 0 (no transposition)
-  // - Metronome must be off
-  const canUseMidiFile = soloOnlyMode && Number(transpose) === 0 && !metronome;
-
-  // Only try to fetch existing MIDI file if conditions allow AND not a remote file
-  if (baseName !== 'remote-file' && canUseMidiFile) {
-    const midiPath = `data/${baseName}.mid`;
-
-    // Try to fetch existing MIDI file from data directory (suppress 404 errors)
-    const midiResponse = await fetch(midiPath);
-    if (midiResponse.ok) {
-      // Found existing MIDI file, use it
-      const midiBuffer = await midiResponse.arrayBuffer();
-
-      // Generate timemap from MusicXML
-      const timemap = await parseMusicXmlTimemap(
-        musicXml,
-        'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
-        new SaxonJSProcessor(),
-      );
-
-      // Store MIDI from data directory in cache for future use
-      await storeMidiFile(baseName, midiBuffer, timemap);
-      return;
-    }
-  }
-
-  // MIDI file doesn't exist in data directory, generate it
-  try {
-    // Convert unpitched percussion to pitched notes before Verovio processing
-    // This allows Verovio to generate proper MIDI with Note On/Off events
-    const processedMusicXml = convertUnpitchedToPitched(musicXml);
-
-    // Use Verovio to generate MIDI and timemap
-    const converter = new VerovioConverter({
-      tuning: g_state.tuning,
-    });
-
-    await converter.initialize(processedMusicXml, {
-      container: document.createElement('div'),
-      musicXml: processedMusicXml,
-      renderer: {},
-      converter: {},
-      output: null,
-      soundfontUri: '',
-      unrollXslUri:
-        'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/unroll.sef.json',
-      timemapXslUri:
-        'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
-      unroll: true,
-      mute: false,
-      repeat: 1,
-      velocity: 1,
-      horizontal: false,
-      followCursor: true,
-      xsltProcessor: new SaxonJSProcessor(),
-    });
-
-    // Generate timemap from ORIGINAL MusicXML (not converted) for accurate measure timing
-    const timemap = await parseMusicXmlTimemap(
-      musicXml,
-      'https://raw.githubusercontent.com/infojunkie/musicxml-midi/main/build/timemap.sef.json',
-      new SaxonJSProcessor(),
-    );
-
-    // Store generated MIDI with timemap
-    await storeMidiFile(baseName, converter.midi, timemap);
-  } catch (generationError) {
-    console.error('Failed to generate MIDI:', generationError);
-    // Don't throw - player will fall back to runtime conversion
   }
 }
 
