@@ -19,23 +19,6 @@ export function addMetronomeTrack(
   const midiArray = new Uint8Array(midiBuffer);
   const midi = new Midi(midiArray);
 
-  // Find the first note time across all tracks (excluding metronome track)
-  let firstNoteTime = Infinity;
-  for (const track of midi.tracks) {
-    if (track.name === 'Metronome') continue; // Skip existing metronome tracks
-    if (track.notes.length > 0) {
-      const trackFirstNote = track.notes[0].time;
-      if (trackFirstNote < firstNoteTime) {
-        firstNoteTime = trackFirstNote;
-      }
-    }
-  }
-
-  // If no notes found, start from 0
-  if (!isFinite(firstNoteTime)) {
-    firstNoteTime = 0;
-  }
-
   // Add metronome track
   const metronomeTrack = midi.addTrack();
   metronomeTrack.name = 'Metronome';
@@ -43,37 +26,62 @@ export function addMetronomeTrack(
 
   // If we have a timemap, use it for precise measure-based metronome
   if (timemap && timemap.length > 0) {
-    for (const entry of timemap) {
+    for (let i = 0; i < timemap.length; i++) {
+      const entry = timemap[i];
       const measureStart = entry.timestamp / 1000; // Convert ms to seconds
-      const measureDuration = entry.duration / 1000; // Convert ms to seconds
-
-      // Skip measures before first note
-      if (measureStart + measureDuration < firstNoteTime) {
-        continue;
-      }
+      const measureDuration = entry.duration / 1000; // Actual measure duration
 
       // Stop if we've exceeded the duration
       if (measureStart >= duration) {
         break;
       }
 
+      // Skip invalid durations
+      if (measureDuration <= 0) continue;
+
       // Get time signature from timemap entry, or default to 4/4
       const timeSignature = entry.timeSignature || [4, 4];
       const beatsPerMeasure = timeSignature[0];
 
-      // Calculate beat duration for this measure
+      // Simple and reliable: divide measure duration by beats to get beat duration
       const beatDuration = measureDuration / beatsPerMeasure;
 
+      // For pickup measures, calculate how many actual beats we have
+      let actualBeats = beatsPerMeasure;
+      let isCompleteMeasure = true;
+
+      // Check if this might be a pickup (incomplete) measure
+      if (i + 1 < timemap.length) {
+        const nextEntry = timemap[i + 1];
+        const nextTimeSignature = nextEntry.timeSignature || [4, 4];
+
+        // If same time signature, compare durations
+        if (
+          nextTimeSignature[0] === beatsPerMeasure &&
+          nextEntry.duration > 0
+        ) {
+          const nextMeasureDuration = nextEntry.duration / 1000;
+          const ratio = measureDuration / nextMeasureDuration;
+
+          // If this measure is significantly shorter, it's likely a pickup
+          if (ratio < 0.95) {
+            actualBeats = Math.max(1, Math.round(ratio * beatsPerMeasure));
+            isCompleteMeasure = false;
+          }
+        }
+      }
+
       // Generate clicks for this measure
-      for (let beat = 0; beat < beatsPerMeasure; beat++) {
+      for (let beat = 0; beat < actualBeats; beat++) {
         const clickTime = measureStart + beat * beatDuration;
 
-        // Skip if before first note or after duration
-        if (clickTime < firstNoteTime || clickTime >= duration) {
+        // Skip if after duration
+        if (clickTime >= duration) {
           continue;
         }
 
-        const isDownbeat = beat === 0;
+        // Downbeat only on beat 0 of complete measures
+        const isDownbeat = beat === 0 && isCompleteMeasure;
 
         // Use different sounds for downbeat (first beat of measure) vs other beats
         const midiNote = isDownbeat ? 76 : 77; // High/Low Wood Block
@@ -94,7 +102,7 @@ export function addMetronomeTrack(
     const beatUnit = 4;
     const beatDuration = (60 / tempo) * (4 / beatUnit);
 
-    for (let time = firstNoteTime; time < duration; time += beatDuration) {
+    for (let time = 0; time < duration; time += beatDuration) {
       const beat = Math.floor(time / beatDuration) % beatsPerMeasure;
       const isDownbeat = beat === 0;
 

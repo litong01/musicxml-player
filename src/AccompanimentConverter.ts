@@ -1085,17 +1085,18 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     const energy = energyMap[this._options.bandEnergy];
 
-    // Determine if we should add melody track
-    // Add melody if:
-    // 1. Solo checkbox is explicitly checked, OR
-    // 2. Nothing at all is selected (not even metronome) - default to melody
-    const hasAnyTrackSelected =
-      this._options.piano ||
-      this._options.bass ||
-      this._options.strings ||
-      this._options.drums ||
-      this._options.metronome;
-    const shouldAddMelody = this._options.solo || !hasAnyTrackSelected;
+    // Simple logic: Add melody ONLY if:
+    // 1. Solo checkbox is checked, OR
+    // 2. Nothing at all is selected (default to melody)
+    const nothingSelected =
+      !this._options.solo &&
+      !this._options.piano &&
+      !this._options.bass &&
+      !this._options.strings &&
+      !this._options.drums &&
+      !this._options.metronome;
+
+    const shouldAddMelody = this._options.solo || nothingSelected;
 
     if (shouldAddMelody) {
       const melodyTrack = midi.addTrack();
@@ -1411,50 +1412,87 @@ export class AccompanimentConverter implements IMIDIConverter {
     }
 
     // Add metronome track if enabled
+    console.log('[Metronome] Options:', {
+      metronome: this._options.metronome,
+      timemapLength: this._timemap?.length || 0,
+    });
+
     if (this._options.metronome) {
+      console.log('[Metronome] Metronome is enabled, creating track...');
       const metronomeTrack = midi.addTrack();
       metronomeTrack.name = 'Metronome';
       metronomeTrack.channel = 9; // Drum channel for metronome clicks
 
-      // Find first note time across all tracks
-      let firstNoteTime = Infinity;
-      for (const track of midi.tracks) {
-        if (track.notes.length > 0) {
-          const trackFirstNote = track.notes[0].time;
-          if (trackFirstNote < firstNoteTime) {
-            firstNoteTime = trackFirstNote;
-          }
-        }
-      }
-      if (!isFinite(firstNoteTime)) {
-        firstNoteTime = 0;
-      }
+      let totalClicks = 0;
 
       // Use timemap for precise measure-based clicks
       if (this._timemap && this._timemap.length > 0) {
-        for (const entry of this._timemap) {
-          const measureStart = entry.timestamp / 1000; // Convert ms to seconds
-          const measureDuration = entry.duration / 1000;
+        console.log(
+          '[Metronome] Generating from timemap with',
+          this._timemap.length,
+          'measures',
+        );
 
-          // Skip measures before first note
-          if (measureStart + measureDuration < firstNoteTime) {
+        for (let i = 0; i < this._timemap.length; i++) {
+          const entry = this._timemap[i];
+          const measureStart = entry.timestamp / 1000; // Convert ms to seconds
+          const measureDuration = entry.duration / 1000; // Actual measure duration
+
+          // Skip invalid durations
+          if (measureDuration <= 0) {
+            console.log(
+              '[Metronome] Skipping measure',
+              i,
+              'invalid duration:',
+              measureDuration,
+            );
             continue;
           }
 
           // Get time signature, default to 4/4
           const timeSignature = entry.timeSignature || [4, 4];
           const beatsPerMeasure = timeSignature[0];
-          const beatDuration = measureDuration / beatsPerMeasure;
+
+          // For pickup measures, calculate how many actual beats we have
+          // by comparing this measure with the next complete measure
+          let actualBeats = beatsPerMeasure;
+          let isCompleteMeasure = true;
+
+          // Check if this might be a pickup (incomplete) measure
+          if (i + 1 < this._timemap.length) {
+            const nextEntry = this._timemap[i + 1];
+            const nextTimeSignature = nextEntry.timeSignature || [4, 4];
+
+            // If same time signature, compare durations
+            if (
+              nextTimeSignature[0] === beatsPerMeasure &&
+              nextEntry.duration > 0
+            ) {
+              const nextMeasureDuration = nextEntry.duration / 1000;
+              const ratio = measureDuration / nextMeasureDuration;
+
+              // If this measure is significantly shorter, it's likely a pickup
+              if (ratio < 0.95) {
+                actualBeats = Math.max(1, Math.round(ratio * beatsPerMeasure));
+                isCompleteMeasure = false;
+                console.log(
+                  `[Metronome] Measure ${i}: Pickup detected. Duration=${measureDuration.toFixed(3)}s, NextDuration=${nextMeasureDuration.toFixed(3)}s, Ratio=${ratio.toFixed(3)}, BeatsPerMeasure=${beatsPerMeasure}, ActualBeats=${actualBeats}`,
+                );
+              }
+            }
+          }
+
+          // Calculate beat duration using ACTUAL beats (not full beatsPerMeasure)
+          // This ensures pickup measures have correct tempo
+          const beatDuration = measureDuration / actualBeats;
 
           // Generate clicks for this measure
-          for (let beat = 0; beat < beatsPerMeasure; beat++) {
+          for (let beat = 0; beat < actualBeats; beat++) {
             const clickTime = measureStart + beat * beatDuration;
 
-            if (clickTime < firstNoteTime) {
-              continue;
-            }
+            // Downbeat only on beat 0 of complete measures
+            const isDownbeat = beat === 0 && isCompleteMeasure;
 
-            const isDownbeat = beat === 0;
             const midiNote = isDownbeat ? 76 : 77; // High/Low Wood Block
             const velocity = isDownbeat ? 127 : 120;
 
@@ -1464,8 +1502,11 @@ export class AccompanimentConverter implements IMIDIConverter {
               duration: 0.1, // Short click
               velocity: velocity / 127,
             });
+            totalClicks++;
           }
         }
+
+        console.log('[Metronome] Generated', totalClicks, 'clicks total');
       }
     }
 

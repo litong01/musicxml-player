@@ -1,8 +1,20 @@
 #!/bin/bash
-# Start the build process and copy files to the iOS app directory and start app and XCode
-npm run build && \
-cp demo/demo.mjs demo/build/demo.mjs && \
-cp demo/index.html ios/App/App/public/index.html && \
-cp demo/build/demo.mjs ios/App/App/public/demo.mjs && \
-cp -r build/* ios/App/App/public/ && \
+set -e  # Exit on any error
+
+echo "🧹 Cleaning old builds..."
+rm -rf build/
+rm -rf demo/build/musicxml-player.*
+rm -rf demo/build/spessasynth_processor.*
+
+echo "🔨 Building library..."
+npm run build
+
+echo "📦 Copying build artifacts to demo/build/..."
+cp -v build/musicxml-player.* demo/build/
+cp -v build/spessasynth_processor.* demo/build/ 2>/dev/null || true
+
+echo "🔄 Syncing to native platforms..."
+npm run cap:sync
+
+echo "📱 Opening Xcode..."
 npm run cap:ios
