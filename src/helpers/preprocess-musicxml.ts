@@ -109,8 +109,8 @@ export function preprocessMusicXml(musicXml: string): PreprocessResult {
 
     // Don't modify XML - just extract metadata
     // Converters will handle missing tempo with defaults
-  } catch (error) {
-    console.warn('[preprocessMusicXml] Error processing:', error);
+  } catch {
+    // Ignore errors in metadata extraction
   }
 
   return { musicXml: cleaned, metadata };

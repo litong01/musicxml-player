@@ -76,10 +76,6 @@ export class VerovioConverter
       // Only use unrolled version if it has notes
       if ((unrolled.match(/<note[\s>]/g) || []).length > 0) {
         finalMusicXml = unrolled;
-      } else {
-        console.warn(
-          '[VerovioConverter] Unroll produced empty score, using original MusicXML',
-        );
       }
     }
 

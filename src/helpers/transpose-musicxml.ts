@@ -16,10 +16,6 @@ export function transposeMusicXml(musicXml: string, semitones: number): string {
   // Check for parsing errors
   const parserError = xmlDoc.querySelector('parsererror');
   if (parserError) {
-    console.error(
-      'XML parsing error in transposeMusicXml:',
-      parserError.textContent,
-    );
     return musicXml; // Return original on error
   }
 

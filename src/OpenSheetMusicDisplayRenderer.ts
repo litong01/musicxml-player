@@ -160,7 +160,6 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     const measure = this._osmd.Sheet.SourceMeasures[index];
 
     if (!measure) {
-      console.warn(`[OSMD] No measure found at index ${index}`);
       return;
     }
 
@@ -188,9 +187,6 @@ export class OpenSheetMusicDisplayRenderer implements ISheetRenderer {
     }
 
     if (!timemapEntry) {
-      console.warn(
-        `[OSMD] No timemap entry found for measure ${index} at ${(start / 1000).toFixed(2)}s (${start}ms)`,
-      );
       return;
     }
 

@@ -163,55 +163,48 @@ export class Player {
     // INFO  xsltProcessor is orchestred from here
     // parseMusicXml and unrollMusicXml expect an instance of IXSLTProcessor
     // converter and renderer expect an instance of IXSLTProcessor
-    try {
-      const parseResult = await parseMusicXml(
-        options.musicXml,
+    const parseResult = await parseMusicXml(
+      options.musicXml,
+      options.xsltProcessor,
+      {
+        title: '//work/work-title/text()',
+        version: '//score-partwise/@version',
+      },
+    );
+
+    // PHASE 1: Remove fermatas (causes timing issues for metronome and playback)
+    let musicXml = removeFermatas(parseResult.musicXml);
+
+    // STEP 2: Unroll only for rendering if requested
+    if (options.unroll) {
+      musicXml = await unrollMusicXml(
+        musicXml,
+        options.unrollXslUri,
         options.xsltProcessor,
-        {
-          title: '//work/work-title/text()',
-          version: '//score-partwise/@version',
-        },
       );
-
-      // PHASE 1: Remove fermatas (causes timing issues for metronome and playback)
-      let musicXml = removeFermatas(parseResult.musicXml);
-
-      // STEP 2: Unroll only for rendering if requested
-      if (options.unroll) {
-        musicXml = await unrollMusicXml(
-          musicXml,
-          options.unrollXslUri,
-          options.xsltProcessor,
-        );
-      }
-
-      // Create the synth element.
-      const context = new AudioContext();
-      //await context.audioWorklet.addModule(new URL('helpers/spessasynth_processor.ts', import.meta.url));
-      await context.audioWorklet.addModule(
-        new URL('spessasynth_processor.js', import.meta.url),
-      );
-      const soundfont = await (
-        await fetish(options.soundfontUri)
-      ).arrayBuffer();
-      const synth = new Synthetizer(context);
-      synth.connect(context.destination);
-      await synth.soundBankManager.addSoundBank(soundfont, 'main');
-
-      // Initialize the various objects.
-      // It's too bad that constructors cannot be made async because that would simplify the code.
-      // INFO Keep looking into this
-      // NOTE: Use original XML for both converter and renderer
-      // (unrolled XML normalization creates invalid XML declarations)
-      await options.converter.initialize(musicXml, options);
-      await options.renderer.initialize(sheet, musicXml, options);
-
-      // Finally, create the player instance.
-      return new Player(options, sheet, parseResult, musicXml, synth, context);
-    } catch (error) {
-      console.error(`[Player.create] ${error}`);
-      throw error;
     }
+
+    // Create the synth element.
+    const context = new AudioContext();
+    //await context.audioWorklet.addModule(new URL('helpers/spessasynth_processor.ts', import.meta.url));
+    await context.audioWorklet.addModule(
+      new URL('spessasynth_processor.js', import.meta.url),
+    );
+    const soundfont = await (await fetish(options.soundfontUri)).arrayBuffer();
+    const synth = new Synthetizer(context);
+    synth.connect(context.destination);
+    await synth.soundBankManager.addSoundBank(soundfont, 'main');
+
+    // Initialize the various objects.
+    // It's too bad that constructors cannot be made async because that would simplify the code.
+    // INFO Keep looking into this
+    // NOTE: Use original XML for both converter and renderer
+    // (unrolled XML normalization creates invalid XML declarations)
+    await options.converter.initialize(musicXml, options);
+    await options.renderer.initialize(sheet, musicXml, options);
+
+    // Finally, create the player instance.
+    return new Player(options, sheet, parseResult, musicXml, synth, context);
   }
 
   protected _sequencer: Sequencer;
@@ -286,8 +279,8 @@ export class Player {
       this._sequencer?.pause();
       this._options?.renderer?.destroy();
       this._abortController?.abort();
-    } catch (error) {
-      console.error(`[Player.destroy] ${error}`);
+    } catch {
+      // Ignore errors during cleanup
     }
   }
 

@@ -75,11 +75,7 @@ export class FetchConverter implements IMIDIConverter {
       vrv.destroy();
 
       return timemap;
-    } catch (error) {
-      console.error(
-        '[FetchConverter] Verovio timemap generation failed:',
-        error,
-      );
+    } catch {
       return [];
     }
   }

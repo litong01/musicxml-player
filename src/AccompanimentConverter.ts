@@ -106,11 +106,6 @@ export class AccompanimentConverter implements IMIDIConverter {
       initialTempo,
     );
 
-    console.log(
-      `[AccompanimentConverter] Extracted ${notes.length} melody notes`,
-    );
-    console.log(`[AccompanimentConverter] isPercussion: ${isPercussion}`);
-
     if (notes.length === 0) {
       throw new Error(`[AccompanimentConverter] No melody notes extracted!`);
     }
@@ -244,11 +239,8 @@ export class AccompanimentConverter implements IMIDIConverter {
           }
         }
       }
-    } catch (error) {
-      console.error(
-        '[AccompanimentConverter] Error extracting tempo metadata:',
-        error,
-      );
+    } catch {
+      // Ignore errors in tempo extraction
     }
 
     return { tempo: initialTempo, tempoChanges };
@@ -308,11 +300,8 @@ export class AccompanimentConverter implements IMIDIConverter {
           }
         }
       }
-    } catch (error) {
-      console.error(
-        '[AccompanimentConverter] Error extracting tempo from unrolled XML:',
-        error,
-      );
+    } catch {
+      // Ignore errors in tempo extraction from unrolled XML
     }
 
     return tempoChanges;
@@ -491,11 +480,8 @@ export class AccompanimentConverter implements IMIDIConverter {
 
         currentTime += measureDuration;
       }
-    } catch (error) {
-      console.error(
-        '[AccompanimentConverter] Error generating timemap:',
-        error,
-      );
+    } catch {
+      // Ignore errors in timemap generation
     }
 
     return timemap;
@@ -603,9 +589,6 @@ export class AccompanimentConverter implements IMIDIConverter {
 
           // Get the timemap entry for this position
           if (!this._timemap || i >= this._timemap.length) {
-            console.warn(
-              `[AccompanimentConverter] No timemap entry for position ${i}`,
-            );
             continue;
           }
           const timemapEntry = this._timemap[i];
@@ -719,8 +702,8 @@ export class AccompanimentConverter implements IMIDIConverter {
           }
         }
       }
-    } catch (error) {
-      console.error('[AccompanimentConverter] Error extracting notes:', error);
+    } catch {
+      // Ignore errors in note extraction
     }
 
     return { notes, isPercussion };
@@ -754,8 +737,8 @@ export class AccompanimentConverter implements IMIDIConverter {
           }
         }
       }
-    } catch (error) {
-      console.error('[AccompanimentConverter] Error detecting key:', error);
+    } catch {
+      // Ignore errors in key detection
     }
 
     return fifths;
@@ -1101,14 +1084,6 @@ export class AccompanimentConverter implements IMIDIConverter {
     };
 
     const energy = energyMap[this._options.bandEnergy];
-
-    console.log(
-      `[AccompanimentConverter] Creating MIDI with options:`,
-      this._options,
-    );
-    console.log(
-      `[AccompanimentConverter] Melody notes: ${melodyNotes.length}, isPercussion: ${isPercussion}`,
-    );
 
     // Determine if we should add melody track
     // Add melody if:

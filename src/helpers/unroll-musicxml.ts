@@ -17,8 +17,8 @@ export async function unrollMusicXml(
 
     // Normalize: propagate tempo based on original measure numbers
     return normalizeMeasures(unrolled, musicXml);
-  } catch (error) {
-    console.error(`[unrollMusicXml] ${error}`);
+  } catch {
+    // Return original on error
   }
   return musicXml;
 }

@@ -87,13 +87,6 @@ async function _parseUncompressed(
       '[parseMusicXml] Invalid MusicXML file contains neither score-partwise nor score-timewise.',
     );
   }
-  const version = xsltProcessor.query(
-    '//score-partwise/@version | //score-timewise/@version',
-    doc,
-  ) ?? {
-    value: '(unknown)',
-  };
-  console.info(`[parseMusicXml] MusicXML ${version.value}`);
   const parseResult: MusicXmlParseResult = {
     musicXml,
     queries: {},
