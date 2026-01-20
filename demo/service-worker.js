@@ -1,4 +1,4 @@
-const CACHE_NAME = 'musicxml-player-v90eb2ed';
+const CACHE_NAME = 'musicxml-player-v65ece70';
 const urlsToCache = [
   '/',
   '/demo.mjs',

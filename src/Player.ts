@@ -491,8 +491,12 @@ export class Player {
   ): BasicMIDI {
     let midiBuffer = converter.midi;
 
-    // Add metronome track if requested
-    if (addMetronome) {
+    // Add metronome track if requested AND converter is NOT AccompanimentConverter
+    // (AccompanimentConverter handles metronome internally)
+    if (
+      addMetronome &&
+      converter.constructor.name !== 'AccompanimentConverter'
+    ) {
       const midi = BasicMIDI.fromArrayBuffer(midiBuffer);
       const tempo = midi.tempoChanges[0]?.tempo || 120;
       const duration = midi.duration;

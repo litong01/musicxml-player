@@ -18,6 +18,7 @@ export interface AccompanimentOptions {
   bass?: boolean;
   strings?: boolean;
   drums?: boolean;
+  metronome?: boolean;
   drummerPracticeMode?: boolean;
 }
 
@@ -56,6 +57,7 @@ export class AccompanimentConverter implements IMIDIConverter {
       bass: options.bass ?? true,
       strings: options.strings ?? true,
       drums: options.drums ?? true,
+      metronome: options.metronome ?? false,
       drummerPracticeMode: options.drummerPracticeMode ?? false,
     };
   }
@@ -1088,8 +1090,23 @@ export class AccompanimentConverter implements IMIDIConverter {
 
     const energy = energyMap[this._options.bandEnergy];
 
-    // Add original melody track (if solo enabled)
-    if (this._options.solo && !isPercussion) {
+    // Track selection logic:
+    // - If NO tracks are selected at all → add melody track (fallback)
+    // - Otherwise, add tracks based on their checkbox status
+    const anyTrackSelected =
+      this._options.solo ||
+      this._options.piano ||
+      this._options.bass ||
+      this._options.strings ||
+      this._options.drums ||
+      this._options.metronome;
+
+    // Add melody track if:
+    // 1. Solo checkbox is checked, OR
+    // 2. No tracks are selected at all (fallback to melody)
+    const shouldAddMelody = this._options.solo || !anyTrackSelected;
+
+    if (shouldAddMelody && !isPercussion) {
       const melodyTrack = midi.addTrack();
       melodyTrack.name = 'Melody';
       melodyTrack.channel = 0;
@@ -1396,6 +1413,61 @@ export class AccompanimentConverter implements IMIDIConverter {
               time: beatTime + beatDuration * 0.5,
               duration: beatDuration * 0.2,
               velocity: (baseVelocity * 0.45) / 127,
+            });
+          }
+        }
+      }
+    }
+
+    // Add metronome track (if metronome enabled)
+    if (this._options.metronome) {
+      const metronomeTrack = midi.addTrack();
+      metronomeTrack.name = 'Metronome';
+      metronomeTrack.channel = 9; // Drum channel for metronome clicks
+
+      // Find first note time from melody
+      let firstNoteTime = Infinity;
+      if (melodyNotes.length > 0) {
+        firstNoteTime = melodyNotes[0].time;
+      }
+      if (!isFinite(firstNoteTime)) {
+        firstNoteTime = 0;
+      }
+
+      // Use timemap for precise measure-based clicks
+      if (this._timemap && this._timemap.length > 0) {
+        for (const entry of this._timemap) {
+          const measureStart = entry.timestamp / 1000; // Convert ms to seconds
+          const measureDuration = entry.duration / 1000;
+
+          // Skip measures that END before first note
+          if (measureStart + measureDuration <= firstNoteTime) {
+            continue;
+          }
+
+          // Get time signature, default to 4/4
+          const timeSignature = entry.timeSignature || [4, 4];
+          const beatsPerMeasure = timeSignature[0];
+          const beatDuration = measureDuration / beatsPerMeasure;
+
+          // Generate clicks for this measure
+          for (let beat = 0; beat < beatsPerMeasure; beat++) {
+            const clickTime = measureStart + beat * beatDuration;
+
+            // Skip clicks BEFORE first note
+            if (clickTime < firstNoteTime) {
+              continue;
+            }
+
+            const isDownbeat = beat === 0;
+            const midiNote = isDownbeat ? 76 : 77; // High/Low Wood Block
+            const velocity = isDownbeat ? 127 : 120;
+
+            metronomeTrack.addNote({
+              midi: midiNote,
+              time: clickTime,
+              duration: 0.1, // Short click
+              velocity: velocity / 127,
             });
           }
         }

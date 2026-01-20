@@ -4,12 +4,9 @@ import {
   MuseScoreConverter,
   MuseScoreRenderer,
   VerovioConverter,
-  VerovioStaticConverter,
   VerovioRenderer,
-  VerovioStaticRenderer,
   OpenSheetMusicDisplayRenderer,
   MmaConverter,
-  FetchConverter,
   AccompanimentConverter,
   parseMusicXml,
   parseMusicXmlTimemap,
@@ -89,7 +86,6 @@ const DEFAULT_OPTIONS = {
   horizontal: false,
   follow: true,
   mute: false,
-  metronome: false,
   respectLineBreaks: false,
   showMeasureNumbers: false,
 };
@@ -114,6 +110,7 @@ const g_state = {
     bass: true,
     strings: true,
     drums: true,
+    metronome: false,
   },
   // Track the actual music source type
   currentMusicSource: 'samples', // 'samples', 'upload', 'url', 'playlist'
@@ -206,49 +203,9 @@ async function createPlayer() {
   }
   document.getElementById(`renderer-${renderer}`).checked = true;
 
-  // Auto-detect converter: prefer custom MIDI if available when only solo track is enabled,
-  // transpose is 0, and metronome is off - otherwise use AccompanimentConverter
-  let hasMidiFile = false;
-
-  // Check if custom MIDI file exists in data directory (skip for external URLs)
-  const baseName = base
-    .replace(/\.(musicxml|mxl|xml)$/i, '')
-    .replace(/^data\//, '');
-
-  // Determine if we're in "solo only" mode (only melody, no band tracks)
-  const soloOnlyMode =
-    g_state.tracks.solo &&
-    !g_state.tracks.piano &&
-    !g_state.tracks.bass &&
-    !g_state.tracks.strings &&
-    !g_state.tracks.drums;
-
-  // Check if we can use existing MIDI file:
-  // - Must be solo-only mode
-  // - Transpose must be 0 (no transposition)
-  // - Metronome must be off
-  const canUseMidiFile =
-    soloOnlyMode && Number(transpose) === 0 && !options.metronome;
-
-  // Only check for existing MIDI files if we can use them
-  if (baseName !== 'remote-file' && canUseMidiFile) {
-    try {
-      const midiPath = base.replace(/\.\w+$/, '.mid');
-      await fetish(midiPath, { method: 'HEAD' });
-      hasMidiFile = true;
-    } catch {
-      // No .mid file on server - will use AccompanimentConverter
-    }
-  }
-
-  // Choose converter: use cached MIDI only when all conditions are met, otherwise generate with AccompanimentConverter
-  if (hasMidiFile && canUseMidiFile) {
-    // Use existing MIDI file for solo-only mode with no transpose and no metronome
-    converter = 'midi';
-  } else {
-    // Generate MIDI with AccompanimentConverter (handles all track combinations, transpose, and metronome)
-    converter = 'accomp';
-  }
+  // Always generate MIDI dynamically with AccompanimentConverter
+  // This ensures proper handling of all track combinations, transpose, and metronome
+  converter = 'accomp';
 
   // Create new player.
   if (g_state.musicXml) {
@@ -359,14 +316,6 @@ async function createRenderer(renderer, sheet, options) {
         element.disabled = true;
       });
       return new MuseScoreRenderer(base.replace(/\.\w+$/, '.mscore.json'));
-    case 'vrvs':
-      document.querySelectorAll('.renderer-option').forEach((element) => {
-        element.disabled = true;
-      });
-      return new VerovioStaticRenderer(
-        [base.replace(/\.\w+$/, '.vrv.svg')],
-        base.replace(/\.\w+$/, '.vrv.json'),
-      );
   }
 }
 
@@ -387,15 +336,6 @@ async function createConverter(converter, sheet, groove, renderer) {
   // generate fresh MIDI with the correct mode.
 
   switch (converter) {
-    case 'midi':
-      const midi = base.replace(/\.\w+$/, '.mid');
-      try {
-        const timemap = base.replace(/\.\w+$/, '.timemap.json');
-        await fetish(timemap, { method: 'HEAD' });
-        return new FetchConverter(midi, timemap);
-      } catch {
-        return new FetchConverter(midi);
-      }
     case 'vrv':
       // Use VerovioConverter for all accompaniment modes
       return new VerovioConverter(g_state.vrvOptions);
@@ -408,6 +348,7 @@ async function createConverter(converter, sheet, groove, renderer) {
         bass: g_state.tracks.bass,
         strings: g_state.tracks.strings,
         drums: g_state.tracks.drums,
+        metronome: g_state.tracks.metronome,
         drummerPracticeMode: true,
       });
     case 'mma':
@@ -418,11 +359,6 @@ async function createConverter(converter, sheet, groove, renderer) {
       return new MmaConverter(window.location.href + 'mma/', parameters);
     case 'mscore':
       return new MuseScoreConverter(base.replace(/\.\w+$/, '.mscore.json'));
-    case 'vrvs':
-      return new VerovioStaticConverter(
-        base.replace(/\.\w+$/, '.mid'),
-        base.replace(/\.\w+$/, '.vrv.json'),
-      );
   }
 }
 
@@ -485,8 +421,6 @@ function handleSettingsOpen() {
   });
 
   // Set the option checkboxes to match current state
-  document.getElementById('option-metronome').checked =
-    g_state.options.metronome;
   document.getElementById('option-mute').checked = g_state.options.mute;
   document.getElementById('respect-line-breaks').checked =
     g_state.options.respectLineBreaks;
@@ -499,6 +433,7 @@ function handleSettingsOpen() {
   document.getElementById('track-bass').checked = g_state.tracks.bass;
   document.getElementById('track-strings').checked = g_state.tracks.strings;
   document.getElementById('track-drums').checked = g_state.tracks.drums;
+  document.getElementById('track-metronome').checked = g_state.tracks.metronome;
 
   // Set the actual input values
   if (currentSource === 'samples') {
@@ -553,18 +488,17 @@ async function handleApplySettings() {
     settings.tracks.piano !== g_state.tracks.piano ||
     settings.tracks.bass !== g_state.tracks.bass ||
     settings.tracks.strings !== g_state.tracks.strings ||
-    settings.tracks.drums !== g_state.tracks.drums;
+    settings.tracks.drums !== g_state.tracks.drums ||
+    settings.tracks.metronome !== g_state.tracks.metronome;
 
   // Check if any renderer options changed (these require reload)
   const currentOptions = g_state.options;
-  const metronomeChanged =
-    settings.options.metronome !== currentOptions.metronome;
   const respectLineBreaksChanged =
     settings.options.respectLineBreaks !== currentOptions.respectLineBreaks;
   const showMeasureNumbersChanged =
     settings.options.showMeasureNumbers !== currentOptions.showMeasureNumbers;
   const renderOptionsChanged =
-    metronomeChanged || respectLineBreaksChanged || showMeasureNumbersChanged;
+    respectLineBreaksChanged || showMeasureNumbersChanged;
 
   // Apply renderer
   if (rendererChanged) {
